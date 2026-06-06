@@ -1,0 +1,101 @@
+schema_version: "0.2"
+
+scenario:
+  type: faq_retrieval
+  name: "FAQ Retrieval Validation Example"
+
+workspace:
+  path: "workspace"
+
+editable_scope:
+  - "configs/retrieval.yaml"
+  - "configs/reranker.yaml"
+
+protected_scope:
+  - "data/golden_set.json"
+
+search_space:
+  top_k:
+    values: [5, 10, 20]
+    mapping:
+      type: yaml_path
+      file: "configs/retrieval.yaml"
+      path: "retrieval.top_k"
+
+  threshold:
+    values: [0.78, 0.82, 0.86]
+    mapping:
+      type: yaml_path
+      file: "configs/retrieval.yaml"
+      path: "retrieval.threshold"
+
+  reranker_enabled:
+    values: [false, true]
+    mapping:
+      type: yaml_path
+      file: "configs/reranker.yaml"
+      path: "enabled"
+
+evaluation:
+  command: "python eval/run_eval.py --json"
+  output_format: json
+  timeout_seconds: 60
+
+metrics:
+  primary:
+    name: "top1_accuracy"
+    direction: maximize
+  secondary:
+    - name: "recall_at_5"
+      direction: maximize
+    - name: "mrr"
+      direction: maximize
+    - name: "latency_ms"
+      direction: minimize
+    - name: "cost_per_query"
+      direction: minimize
+
+constraints:
+  latency_ms:
+    max: 1000
+  cost_per_query:
+    max: 0.02
+  all_tests_pass:
+    required: true
+
+decision_policy:
+  mode: constrained_primary_metric
+  min_primary_improvement: 0.001
+
+pareto:
+  enabled: true
+  profiles:
+    - accuracy_first
+    - balanced
+    - latency_first
+    - cost_first
+
+run_policy:
+  max_experiments: 10
+  stop_if_no_improvement_rounds: 3
+  random_seed: 42
+  dry_run: false
+  max_runtime_minutes: 30
+  max_failed_evaluations: 3
+
+version_control:
+  enabled: false
+  require_clean_worktree: true
+  create_branch: true
+  commit_accepted_changes: false
+  rollback_rejected_changes: true
+  branch_prefix: "auto-optimize/"
+  push_remote: false
+  create_pull_request: false
+  commit_message_template: |
+    auto-optimize: {experiment_id} {summary}
+
+report:
+  formats:
+    - markdown
+  output_dir: "auto_optimize_outputs"
