@@ -1,0 +1,49 @@
+# Recommended metric profile for embedding and retrieval optimization.
+#
+# Focuses on retrieval quality, embedding latency, and index size.
+
+metrics:
+  primary:
+    name: "ndcg_at_10"
+    direction: maximize
+  secondary:
+    - name: "top1_accuracy"
+      direction: maximize
+    - name: "recall_at_10"
+      direction: maximize
+    - name: "recall_at_50"
+      direction: maximize
+    - name: "mrr"
+      direction: maximize
+    - name: "embed_query_latency_p95_ms"
+      direction: minimize
+    - name: "embed_doc_latency_ms"
+      direction: minimize
+    - name: "index_size_mb"
+      direction: minimize
+    - name: "embedding_dimension"
+      direction: minimize
+
+constraints:
+  embed_query_latency_p95_ms:
+    max: 80
+  index_size_mb:
+    max: 4096
+
+decision_policy:
+  mode: constrained_primary_metric
+  min_primary_improvement: 0.002
+
+pareto:
+  enabled: true
+  profiles:
+    - accuracy_first
+    - balanced
+    - latency_first
+    - cost_first
+
+report:
+  formats:
+    - markdown
+    - json
+  output_dir: "auto_optimize_outputs"

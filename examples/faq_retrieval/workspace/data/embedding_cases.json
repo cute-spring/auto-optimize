@@ -1,0 +1,38 @@
+[
+  {
+    "case_id": "embed_case_01",
+    "focus": "faq_embedding_template",
+    "language": "zh",
+    "user_query": "怎么开电子发票？",
+    "target_faq_id": "invoice_download",
+    "recommended_templates": [
+      "question_with_answer",
+      "question_title_answer_bilingual"
+    ],
+    "why": "发票类问题通常需要把业务名词和操作路径一起编码进 FAQ embedding。"
+  },
+  {
+    "case_id": "embed_case_02",
+    "focus": "query_embedding_template",
+    "language": "mixed",
+    "user_query": "refund 多久能到？",
+    "target_faq_id": "refund_arrival_time",
+    "recommended_templates": [
+      "normalized_query",
+      "bilingual_expansion"
+    ],
+    "why": "用户查询中英混合，query 侧归一化或双语扩展通常比原始 query 更稳。"
+  },
+  {
+    "case_id": "embed_case_03",
+    "focus": "multilingual_normalization",
+    "language": "en",
+    "user_query": "Forgot my password",
+    "target_faq_id": "account_password_reset",
+    "recommended_templates": [
+      "raw_query",
+      "normalized_query"
+    ],
+    "why": "该类短 query 的主要变量通常不是语义扩展，而是归一化和 FAQ 文本拼接方式。"
+  }
+]

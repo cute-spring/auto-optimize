@@ -1,0 +1,49 @@
+# Recommended metric profile for FAQ or support retrieval.
+#
+# Copy these sections into a contract and make sure your evaluation
+# command returns the same metric names in JSON.
+
+metrics:
+  primary:
+    name: "top1_accuracy"
+    direction: maximize
+  secondary:
+    - name: "hit_at_3"
+      direction: maximize
+    - name: "recall_at_10"
+      direction: maximize
+    - name: "mrr"
+      direction: maximize
+    - name: "hard_negative_error_rate"
+      direction: minimize
+    - name: "embed_query_latency_p95_ms"
+      direction: minimize
+    - name: "rerank_latency_p95_ms"
+      direction: minimize
+    - name: "index_size_mb"
+      direction: minimize
+
+constraints:
+  embed_query_latency_p95_ms:
+    max: 120
+  rerank_latency_p95_ms:
+    max: 250
+  index_size_mb:
+    max: 4096
+
+decision_policy:
+  mode: constrained_primary_metric
+  min_primary_improvement: 0.002
+
+pareto:
+  enabled: true
+  profiles:
+    - accuracy_first
+    - balanced
+    - latency_first
+
+report:
+  formats:
+    - markdown
+    - json
+  output_dir: "auto_optimize_outputs"

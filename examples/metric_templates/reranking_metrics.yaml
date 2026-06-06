@@ -1,0 +1,44 @@
+# Recommended metric profile for reranking optimization.
+#
+# Focuses on ranking gain over retrieval plus rerank latency.
+
+metrics:
+  primary:
+    name: "mrr"
+    direction: maximize
+  secondary:
+    - name: "top1_accuracy"
+      direction: maximize
+    - name: "ndcg_at_10"
+      direction: maximize
+    - name: "rerank_gain_over_retrieval"
+      direction: maximize
+    - name: "recovered_at_1_from_top10"
+      direction: maximize
+    - name: "candidate_depth_sensitivity"
+      direction: maximize
+    - name: "rerank_latency_p95_ms"
+      direction: minimize
+    - name: "latency_per_candidate_ms"
+      direction: minimize
+
+constraints:
+  rerank_latency_p95_ms:
+    max: 200
+
+decision_policy:
+  mode: constrained_primary_metric
+  min_primary_improvement: 0.002
+
+pareto:
+  enabled: true
+  profiles:
+    - accuracy_first
+    - balanced
+    - latency_first
+
+report:
+  formats:
+    - markdown
+    - json
+  output_dir: "auto_optimize_outputs"

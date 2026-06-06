@@ -25,7 +25,7 @@ Use this skill when the user wants to improve a project component through contro
 ## Required Artifacts
 
 - `optimization.contract.yaml`
-- `experiment_log.jsonl` for future run mode
+- `experiment_log.jsonl` after run mode executes
 
 ## Safety Rules
 
@@ -40,7 +40,7 @@ Use this skill when the user wants to improve a project component through contro
 ## Git Rules
 
 - Use a new optimization branch when configured.
-- Create checkpoints before each experiment in future Runner mode.
+- Record Git state before the run and branch when configured.
 - Commit accepted experiments only when configured.
 - Roll back rejected experiments safely.
 - Never push to remote or create pull requests in MVP.
@@ -68,9 +68,14 @@ python -m auto_optimize.cli report auto_optimize_outputs/experiment_log.jsonl
 ## Output Files
 
 - `auto_optimize_outputs/contract_validation_report.md`
-- `auto_optimize_outputs/optimization.contract.draft.yaml` in future Advisor mode
-- `auto_optimize_outputs/readiness_report.json` in future Advisor mode
-- `auto_optimize_outputs/experiment_log.jsonl` in future Run mode
+- `auto_optimize_outputs/optimization.contract.draft.yaml`
+- `auto_optimize_outputs/readiness_report.json`
+- `auto_optimize_outputs/experiment_log.jsonl`
+- `auto_optimize_outputs/experiment_log.csv`
+- `auto_optimize_outputs/run_summary.json`
+- `auto_optimize_outputs/optimization_report.md`
+- `auto_optimize_outputs/run_history.jsonl`
+- `auto_optimize_outputs/best_run_snapshot.json`
 
 ## Stop Conditions
 

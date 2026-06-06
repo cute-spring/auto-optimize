@@ -1,1 +1,1 @@
-"""Advisor scaffolding for future AutoOptimize phases."""
+"""Advisor helpers for contract draft and readiness generation."""

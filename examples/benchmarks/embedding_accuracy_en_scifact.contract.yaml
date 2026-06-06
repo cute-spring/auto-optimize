@@ -1,0 +1,116 @@
+# Metric profile: examples/metric_templates/embedding_metrics.yaml
+
+schema_version: "0.2"
+
+scenario:
+  type: retrieval_embedding_benchmark
+  name: "English Embedding Accuracy Benchmark - SciFact"
+
+workspace:
+  path: "./workspaces/scifact_benchmark"
+
+editable_scope:
+  - "configs/embedding.yaml"
+  - "configs/retrieval.yaml"
+
+protected_scope:
+  - "data/"
+  - "eval/"
+  - ".env"
+  - "secrets/"
+
+search_space:
+  embedding_model:
+    values:
+      - "bge-base-en-v1.5"
+      - "e5-base-v2"
+      - "gte-base-en"
+    mapping:
+      type: yaml_path
+      file: "configs/embedding.yaml"
+      path: "embedding.model_name"
+
+  query_instruction_mode:
+    values:
+      - "none"
+      - "retrieval_query_prefix"
+    mapping:
+      type: yaml_path
+      file: "configs/embedding.yaml"
+      path: "embedding.query_instruction_mode"
+
+  top_k:
+    values: [10, 20, 50]
+    mapping:
+      type: yaml_path
+      file: "configs/retrieval.yaml"
+      path: "retrieval.top_k"
+
+evaluation:
+  command: "python eval/run_scifact_eval.py --json"
+  output_format: json
+  timeout_seconds: 1800
+
+metrics:
+  primary:
+    name: "ndcg_at_10"
+    direction: maximize
+  secondary:
+    - name: "top1_accuracy"
+      direction: maximize
+    - name: "recall_at_10"
+      direction: maximize
+    - name: "recall_at_50"
+      direction: maximize
+    - name: "mrr"
+      direction: maximize
+    - name: "embed_query_latency_p95_ms"
+      direction: minimize
+    - name: "embed_doc_latency_ms"
+      direction: minimize
+    - name: "index_size_mb"
+      direction: minimize
+    - name: "embedding_dimension"
+      direction: minimize
+
+constraints:
+  embed_query_latency_p95_ms:
+    max: 80
+  index_size_mb:
+    max: 4096
+
+decision_policy:
+  mode: constrained_primary_metric
+  min_primary_improvement: 0.002
+
+pareto:
+  enabled: true
+  profiles:
+    - accuracy_first
+    - balanced
+    - latency_first
+    - cost_first
+
+run_policy:
+  max_experiments: 24
+  stop_if_no_improvement_rounds: 6
+  random_seed: 42
+  dry_run: false
+  max_runtime_minutes: 120
+  max_failed_evaluations: 5
+
+version_control:
+  enabled: true
+  require_clean_worktree: true
+  create_branch: true
+  commit_accepted_changes: false
+  rollback_rejected_changes: true
+  branch_prefix: "auto-optimize/"
+  push_remote: false
+  create_pull_request: false
+
+report:
+  formats:
+    - markdown
+    - json
+  output_dir: "auto_optimize_outputs"

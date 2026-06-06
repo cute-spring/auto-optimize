@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
 import yaml
 
+from auto_optimize.runner.evaluator import EvaluationExecutionError, execute_evaluation
 from auto_optimize.safety.budget_guard import validate_run_policy
 from auto_optimize.safety.eval_integrity_guard import infer_eval_paths
 from auto_optimize.safety.scope_guard import find_scope_conflicts, is_editable, is_protected
@@ -148,65 +148,11 @@ def _validate_version_control(contract: OptimizationContract, result: Validation
         )
 
 
-def _run_baseline_evaluation(contract: OptimizationContract, result: ValidationResult) -> None:
-    output_file = None
-    if contract.evaluation.output_file:
-        output_file = resolve_workspace_relative(contract.workspace_path, contract.evaluation.output_file)
-        if output_file.exists():
-            output_file.unlink()
-
-    try:
-        completed = subprocess.run(
-            contract.evaluation.command,
-            cwd=contract.workspace_path,
-            shell=True,
-            text=True,
-            capture_output=True,
-            timeout=contract.evaluation.timeout_seconds,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        result.add_issue(
-            "error",
-            "evaluation_timeout",
-            f"Evaluation command exceeded timeout of {contract.evaluation.timeout_seconds} seconds.",
-        )
-        return
-
-    if completed.returncode != 0:
-        result.add_issue(
-            "error",
-            "evaluation_command_failed",
-            "Evaluation command failed during baseline validation.",
-            hint=completed.stderr.strip() or completed.stdout.strip() or "No output captured.",
-        )
-        return
-
-    raw_output = completed.stdout.strip()
-    if output_file is not None:
-        if not output_file.exists():
-            result.add_issue(
-                "error",
-                "missing_evaluation_output_file",
-                f"Evaluation output file '{contract.evaluation.output_file}' was not created.",
-            )
-            return
-        raw_output = output_file.read_text(encoding="utf-8").strip()
-
-    try:
-        metrics = json.loads(raw_output)
-    except json.JSONDecodeError as exc:
-        result.add_issue(
-            "error",
-            "invalid_evaluation_output",
-            f"Evaluation output is not valid JSON: {exc}",
-        )
-        return
-
-    if not isinstance(metrics, dict):
-        result.add_issue("error", "invalid_evaluation_shape", "Evaluation output JSON must be an object.")
-        return
-
+def _validate_evaluation_metrics(
+    contract: OptimizationContract,
+    metrics: dict[str, Any],
+    result: ValidationResult,
+) -> None:
     primary_metric = contract.metrics.primary.name
     if primary_metric not in metrics:
         result.add_issue(
@@ -225,6 +171,16 @@ def _run_baseline_evaluation(contract: OptimizationContract, result: ValidationR
             )
 
     result.baseline_metrics = metrics
+
+
+def _run_baseline_evaluation(contract: OptimizationContract, result: ValidationResult) -> None:
+    try:
+        metrics = execute_evaluation(contract)
+    except EvaluationExecutionError as exc:
+        result.add_issue("error", exc.code, exc.message, hint=exc.hint)
+        return
+
+    _validate_evaluation_metrics(contract, metrics, result)
 
 
 def validate_contract(contract: OptimizationContract) -> ValidationResult:

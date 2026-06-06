@@ -1,6 +1,74 @@
 [
   {
-    "question": "What is AutoOptimize?",
-    "answer": "A contract-driven optimization tool."
+    "case_id": "faq_zh_password_reset",
+    "language": "zh",
+    "user_query": "如何重置密码？",
+    "query_variants": [
+      "忘记密码怎么处理？",
+      "重设登录密码"
+    ],
+    "expected_faq_id": "account_password_reset",
+    "faq_title": "账户与登录",
+    "faq_question": "如何重置密码？",
+    "faq_answer": "进入登录页后点击“忘记密码”，按邮件或短信指引完成重置。",
+    "keywords": [
+      "密码",
+      "重置",
+      "忘记密码"
+    ]
+  },
+  {
+    "case_id": "faq_en_invoice",
+    "language": "en",
+    "user_query": "Can I get an invoice for my subscription?",
+    "query_variants": [
+      "How do I request an invoice?",
+      "subscription invoice"
+    ],
+    "expected_faq_id": "billing_invoice_request",
+    "faq_title": "Billing",
+    "faq_question": "How can I request an invoice for my subscription?",
+    "faq_answer": "Go to Billing Settings and choose Invoice Request after a successful payment.",
+    "keywords": [
+      "invoice",
+      "billing",
+      "subscription"
+    ]
+  },
+  {
+    "case_id": "faq_zh_en_refund",
+    "language": "mixed",
+    "user_query": "退款一般多久到账？",
+    "query_variants": [
+      "How long does a refund take?",
+      "退款到账时间"
+    ],
+    "expected_faq_id": "refund_arrival_time",
+    "faq_title": "Payments / 支付",
+    "faq_question": "How long does a refund take to arrive? / 退款一般多久到账？",
+    "faq_answer": "Refunds usually arrive within 3 to 7 business days depending on the payment channel.",
+    "keywords": [
+      "refund",
+      "退款",
+      "到账"
+    ]
+  },
+  {
+    "case_id": "faq_zh_feature_scope",
+    "language": "zh",
+    "user_query": "企业版支持 SSO 吗？",
+    "query_variants": [
+      "单点登录支持吗",
+      "SSO enterprise"
+    ],
+    "expected_faq_id": "enterprise_sso_support",
+    "faq_title": "企业功能",
+    "faq_question": "企业版支持 SSO 吗？",
+    "faq_answer": "支持，企业版可配置 SAML SSO，并可结合组织域名自动发现。",
+    "keywords": [
+      "SSO",
+      "SAML",
+      "企业版"
+    ]
   }
 ]

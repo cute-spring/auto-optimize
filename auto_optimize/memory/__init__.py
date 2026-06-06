@@ -1,1 +1,1 @@
-"""Experiment memory scaffolding for future AutoOptimize phases."""
+"""Experiment memory helpers for AutoOptimize runs."""
