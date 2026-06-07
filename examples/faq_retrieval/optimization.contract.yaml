@@ -116,6 +116,8 @@ pareto:
 run_policy:
   max_experiments: 10
   stop_if_no_improvement_rounds: 4
+  search_strategy: one_variable
+  max_pairwise_candidates: 12
   random_seed: 42
   dry_run: false
   max_runtime_minutes: 30

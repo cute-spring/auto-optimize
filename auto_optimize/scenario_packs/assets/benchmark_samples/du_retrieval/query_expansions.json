@@ -1,0 +1,17 @@
+{
+  "q1": {
+    "raw_query": [],
+    "normalized_query": ["订单", "审核"],
+    "keyword_augmented_query": ["订单", "审核", "申请"]
+  },
+  "q2": {
+    "raw_query": [],
+    "normalized_query": ["手机号", "验证码"],
+    "keyword_augmented_query": ["手机号", "验证码", "账号"]
+  },
+  "q3": {
+    "raw_query": [],
+    "normalized_query": ["电子", "专票"],
+    "keyword_augmented_query": ["电子", "专票", "支付"]
+  }
+}

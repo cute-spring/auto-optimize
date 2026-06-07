@@ -3,13 +3,21 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import yaml
 
 from auto_optimize.safety.scope_guard import is_editable, is_protected
 from auto_optimize.shared.paths import resolve_workspace_relative, to_posix_relative
 from auto_optimize.shared.schemas import OptimizationContract, SearchSpaceMapping
+
+
+@dataclass(slots=True)
+class CandidateChange:
+    parameter: str
+    value: Any
+    mapping: SearchSpaceMapping
+    current_value: Any
 
 
 @dataclass(slots=True)
@@ -86,29 +94,62 @@ def apply_parameter_value(
     mapping: SearchSpaceMapping,
     new_value: Any,
 ) -> tuple[ChangeRecord, FileSnapshot]:
-    relative_file = to_posix_relative(mapping.file)
-    if not is_editable(relative_file, contract.editable_scope):
-        raise ValueError(f"Cannot edit '{mapping.file}': outside editable_scope.")
-    if is_protected(relative_file, contract.protected_scope):
-        raise ValueError(f"Cannot edit '{mapping.file}': file is protected.")
-
-    target_path = resolve_workspace_relative(contract.workspace_path, mapping.file)
-    original_content = target_path.read_text(encoding="utf-8")
-    document = _load_document(target_path, mapping.type)
-    before = _set_nested_value(document, mapping.path, new_value)
-    _dump_document(target_path, mapping.type, document)
-
-    change = ChangeRecord(
+    change = CandidateChange(
         parameter=parameter_name,
-        file=mapping.file,
-        path=mapping.path,
-        before=before,
-        after=new_value,
+        value=new_value,
+        mapping=mapping,
+        current_value=read_current_value(contract, mapping),
     )
-    snapshot = FileSnapshot(file=mapping.file, content=original_content)
-    return change, snapshot
+    changes, snapshots = apply_candidate_changes(contract, [change])
+    return changes[0], snapshots[0]
 
 
+def apply_candidate_changes(
+    contract: OptimizationContract,
+    candidate_changes: Sequence[CandidateChange],
+) -> tuple[list[ChangeRecord], list[FileSnapshot]]:
+    if not candidate_changes:
+        return [], []
+
+    grouped_changes: dict[str, list[CandidateChange]] = {}
+    for change in candidate_changes:
+        grouped_changes.setdefault(to_posix_relative(change.mapping.file), []).append(change)
+
+    change_records: list[ChangeRecord] = []
+    snapshots: list[FileSnapshot] = []
+
+    for relative_file, file_changes in grouped_changes.items():
+        if not is_editable(relative_file, contract.editable_scope):
+            raise ValueError(f"Cannot edit '{relative_file}': outside editable_scope.")
+        if is_protected(relative_file, contract.protected_scope):
+            raise ValueError(f"Cannot edit '{relative_file}': file is protected.")
+
+        target_path = resolve_workspace_relative(contract.workspace_path, relative_file)
+        original_content = target_path.read_text(encoding="utf-8")
+        mapping_type = file_changes[0].mapping.type
+        document = _load_document(target_path, mapping_type)
+
+        for candidate_change in file_changes:
+            before = _set_nested_value(document, candidate_change.mapping.path, candidate_change.value)
+            change_records.append(
+                ChangeRecord(
+                    parameter=candidate_change.parameter,
+                    file=candidate_change.mapping.file,
+                    path=candidate_change.mapping.path,
+                    before=before,
+                    after=candidate_change.value,
+                )
+            )
+
+        _dump_document(target_path, mapping_type, document)
+        snapshots.append(FileSnapshot(file=relative_file, content=original_content))
+
+    return change_records, snapshots
+
+
+def restore_snapshots(contract: OptimizationContract, snapshots: Sequence[FileSnapshot]) -> None:
+    for snapshot in snapshots:
+        restore_snapshot(contract, snapshot)
 def restore_snapshot(contract: OptimizationContract, snapshot: FileSnapshot) -> None:
     target_path = resolve_workspace_relative(contract.workspace_path, snapshot.file)
     target_path.write_text(snapshot.content, encoding="utf-8")

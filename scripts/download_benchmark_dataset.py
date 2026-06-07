@@ -10,6 +10,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from auto_optimize.scenario_packs.benchmark_materializer import materialize_benchmark_workspace
+from auto_optimize.scenario_packs.dataset_export import export_dataset_from_disk
 
 
 DATASETS = {
@@ -25,6 +26,7 @@ DATASETS = {
         "language": "zh",
         "download_mode": "huggingface",
         "hf_id": "mteb/DuRetrieval",
+        "hf_configs": ["corpus", "queries", "default"],
         "note": "Recommended default Chinese retrieval benchmark.",
     },
     "cmedqa_reranking": {
@@ -32,6 +34,7 @@ DATASETS = {
         "language": "zh",
         "download_mode": "huggingface",
         "hf_id": "mteb/CMedQAv2-reranking",
+        "hf_configs": ["corpus", "queries", "default", "top_ranked"],
         "note": "Recommended default Chinese FAQ-like reranking benchmark.",
     },
     "t2_reranking": {
@@ -39,6 +42,7 @@ DATASETS = {
         "language": "zh",
         "download_mode": "huggingface",
         "hf_id": "mteb/T2Reranking",
+        "hf_configs": ["corpus", "queries", "default", "top_ranked"],
         "note": "Stronger Chinese reranking benchmark for extended local evaluation.",
     },
     "miracl_retrieval": {
@@ -97,9 +101,24 @@ def download_dataset(dataset_key: str, output_dir: Path) -> int:
     load_dataset = _require_datasets()
     target_dir = output_dir / dataset_key
     target_dir.mkdir(parents=True, exist_ok=True)
-    dataset = load_dataset(meta["hf_id"])
-    dataset.save_to_disk(str(target_dir))
+    configs = meta.get("hf_configs")
+    if configs:
+        for config_name in configs:
+            dataset = load_dataset(meta["hf_id"], config_name)
+            config_dir = target_dir / config_name
+            config_dir.mkdir(parents=True, exist_ok=True)
+            dataset.save_to_disk(str(config_dir))
+            print(f"Downloaded {dataset_key}:{config_name} to {config_dir}")
+    else:
+        dataset = load_dataset(meta["hf_id"])
+        dataset.save_to_disk(str(target_dir))
     print(f"Downloaded {dataset_key} to {target_dir}")
+    try:
+        export_result = export_dataset_from_disk(dataset_key=dataset_key, dataset_dir=target_dir)
+    except Exception as exc:
+        print(f"Could not export normalized local layout for {dataset_key}: {exc}")
+    else:
+        print(f"Exported normalized dataset layout to {export_result.export_dir}")
     return 0
 
 

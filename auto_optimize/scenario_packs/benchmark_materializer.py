@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -40,7 +41,14 @@ BENCHMARK_SPECS: dict[str, BenchmarkSpec] = {
                     "model_name": "gte-base-en",
                     "query_instruction_mode": "none",
                 }
-            }
+            },
+            "configs/provider.yaml": {
+                "provider": {
+                    "mode": "sample",
+                    "model_name": None,
+                    "allow_fallback_to_sample": True,
+                }
+            },
         },
     ),
     "du_retrieval": BenchmarkSpec(
@@ -53,6 +61,13 @@ BENCHMARK_SPECS: dict[str, BenchmarkSpec] = {
             "configs/embedding.yaml": {
                 "embedding": {
                     "model_name": "gte-multilingual-base",
+                }
+            },
+            "configs/provider.yaml": {
+                "provider": {
+                    "mode": "sample",
+                    "model_name": None,
+                    "allow_fallback_to_sample": True,
                 }
             },
             "configs/query_processing.yaml": {
@@ -70,6 +85,13 @@ BENCHMARK_SPECS: dict[str, BenchmarkSpec] = {
         workspace_dir_name="cmedqa_reranking_benchmark",
         retrieval_defaults={"retrieval": {"initial_top_k": 100}},
         extra_config_files={
+            "configs/provider.yaml": {
+                "provider": {
+                    "mode": "sample",
+                    "model_name": None,
+                    "allow_fallback_to_sample": True,
+                }
+            },
             "configs/reranker.yaml": {
                 "reranker": {
                     "model_name": "gte-reranker-modernbert-base",
@@ -273,8 +295,110 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _asset_dir() -> Path:
+    return _repo_root() / "auto_optimize" / "scenario_packs" / "assets"
+
+
 def _template_path(template_name: str) -> Path:
     return _repo_root() / "examples" / "benchmarks" / template_name
+
+
+def _copy_sample_data(spec: BenchmarkSpec, workspace_path: Path) -> None:
+    sample_root = _asset_dir() / "benchmark_samples" / spec.dataset_key
+    if not sample_root.exists():
+        return
+    target_root = workspace_path / "data"
+    target_root.mkdir(parents=True, exist_ok=True)
+    for source in sample_root.rglob("*"):
+        if not source.is_file():
+            continue
+        relative = source.relative_to(sample_root)
+        destination = target_root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+
+
+def _supported_dataset_files(spec: BenchmarkSpec) -> tuple[list[str], list[str]]:
+    if spec.scenario_family == "retrieval_embedding":
+        return (
+            ["corpus.jsonl", "queries.jsonl", "qrels.json"],
+            ["query_expansions.json"],
+        )
+    if spec.scenario_family == "reranking":
+        return (
+            ["corpus.jsonl", "queries.jsonl", "qrels.json", "candidates.json"],
+            ["query_expansions.json"],
+        )
+    raise ValueError(f"Unsupported scenario family: {spec.scenario_family}")
+
+
+def _resolve_dataset_payload_root(dataset_dir: Path) -> Path:
+    export_dir = dataset_dir / "auto_optimize_export"
+    if export_dir.exists() and export_dir.is_dir():
+        return export_dir
+    data_dir = dataset_dir / "data"
+    if data_dir.exists() and data_dir.is_dir():
+        return data_dir
+    return dataset_dir
+
+
+def _copy_local_dataset_files(spec: BenchmarkSpec, dataset_dir: Path, workspace_path: Path) -> dict[str, Any]:
+    source_root = _resolve_dataset_payload_root(dataset_dir)
+    required_files, optional_files = _supported_dataset_files(spec)
+    available_required = [name for name in required_files if (source_root / name).exists()]
+    if len(available_required) != len(required_files):
+        return {
+            "used": False,
+            "source_root": str(source_root),
+            "missing_required_files": [name for name in required_files if name not in available_required],
+            "copied_files": [],
+        }
+
+    copied_files: list[str] = []
+    target_root = workspace_path / "data"
+    target_root.mkdir(parents=True, exist_ok=True)
+    for name in required_files + optional_files:
+        source = source_root / name
+        if not source.exists():
+            continue
+        destination = target_root / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+        copied_files.append(name)
+
+    return {
+        "used": True,
+        "source_root": str(source_root),
+        "missing_required_files": [],
+        "copied_files": copied_files,
+    }
+
+
+def _count_jsonl_rows(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
+def _count_json_entries(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        return len(payload)
+    if isinstance(payload, list):
+        return len(payload)
+    return None
+
+
+def _summarize_materialized_data(workspace_path: Path) -> dict[str, int | None]:
+    data_root = workspace_path / "data"
+    return {
+        "corpus_rows": _count_jsonl_rows(data_root / "corpus.jsonl"),
+        "query_rows": _count_jsonl_rows(data_root / "queries.jsonl"),
+        "qrels_queries": _count_json_entries(data_root / "qrels.json"),
+        "candidate_queries": _count_json_entries(data_root / "candidates.json"),
+    }
 
 
 def _write_yaml(path: Path, payload: dict[str, Any]) -> None:
@@ -286,13 +410,27 @@ def _load_template(spec: BenchmarkSpec) -> dict[str, Any]:
     return yaml.safe_load(_template_path(spec.template_name).read_text(encoding="utf-8"))
 
 
-def _build_manifest(spec: BenchmarkSpec, dataset_dir: Path | None, sample_limit: int | None) -> dict[str, Any]:
+def _build_manifest(
+    spec: BenchmarkSpec,
+    dataset_dir: Path | None,
+    sample_limit: int | None,
+    data_source: str,
+    copied_files: list[str],
+    source_root: str | None,
+    missing_required_files: list[str],
+    data_summary: dict[str, int | None],
+) -> dict[str, Any]:
     return {
         "dataset_key": spec.dataset_key,
         "scenario_family": spec.scenario_family,
         "dataset_dir": None if dataset_dir is None else str(dataset_dir),
         "dataset_available_locally": dataset_dir is not None,
         "sample_limit": sample_limit,
+        "data_source": data_source,
+        "source_root": source_root,
+        "copied_files": copied_files,
+        "missing_required_files": missing_required_files,
+        "data_summary": data_summary,
         "note": "This workspace was materialized for AutoOptimize benchmark validation and MVP run flows.",
     }
 
@@ -321,16 +459,41 @@ def materialize_benchmark_workspace(
         _write_yaml(workspace_path / relative_path, payload)
     _write_yaml(workspace_path / "configs" / "retrieval.yaml", spec.retrieval_defaults)
 
+    local_copy_result = {
+        "used": False,
+        "source_root": None,
+        "missing_required_files": [],
+        "copied_files": [],
+    }
+    if dataset_dir is not None and dataset_dir.exists():
+        local_copy_result = _copy_local_dataset_files(spec, dataset_dir, workspace_path)
+    if not local_copy_result["used"]:
+        _copy_sample_data(spec, workspace_path)
+
     manifest_path = workspace_path / "data" / "benchmark_manifest.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(
-        json.dumps(_build_manifest(spec, dataset_dir, sample_limit), indent=2, ensure_ascii=False) + "\n",
+        json.dumps(
+            _build_manifest(
+                spec,
+                dataset_dir,
+                sample_limit,
+                data_source="local_dataset_dir" if local_copy_result["used"] else "sample_assets",
+                copied_files=local_copy_result["copied_files"],
+                source_root=local_copy_result["source_root"],
+                missing_required_files=local_copy_result["missing_required_files"],
+                data_summary=_summarize_materialized_data(workspace_path),
+            ),
+            indent=2,
+            ensure_ascii=False,
+        )
+        + "\n",
         encoding="utf-8",
     )
 
     eval_path = workspace_path / "eval" / "run_benchmark_eval.py"
     eval_path.parent.mkdir(parents=True, exist_ok=True)
-    eval_path.write_text(_EVAL_SCRIPT, encoding="utf-8")
+    eval_path.write_text((_asset_dir() / "run_benchmark_eval_template.py").read_text(encoding="utf-8"), encoding="utf-8")
 
     readme_path = root_dir / "README.md"
     readme_path.write_text(

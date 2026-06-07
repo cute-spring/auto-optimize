@@ -12,7 +12,7 @@ from auto_optimize.safety.eval_integrity_guard import infer_eval_paths
 from auto_optimize.safety.scope_guard import find_scope_conflicts, is_editable, is_protected
 from auto_optimize.safety.secret_guard import validate_secret_scope
 from auto_optimize.shared.errors import ValidationResult
-from auto_optimize.shared.git import inspect_git_repo, is_git_available
+from auto_optimize.shared.git import inspect_git_repo, is_gh_available, is_git_available, list_remotes
 from auto_optimize.shared.paths import resolve_workspace_relative, to_posix_relative
 from auto_optimize.shared.schemas import OptimizationContract, SearchSpaceParameter
 
@@ -90,12 +90,17 @@ def _validate_search_parameter(
 def _validate_version_control(contract: OptimizationContract, result: ValidationResult) -> None:
     version_control = contract.version_control
 
-    if version_control.push_remote or version_control.create_pull_request:
+    if version_control.create_pull_request and not version_control.push_remote:
         result.add_issue(
             "error",
-            "unsupported_remote_git_operation",
-            "Remote Git push and pull request creation are not supported in this MVP.",
-            hint="Set version_control.push_remote=false and version_control.create_pull_request=false.",
+            "create_pr_requires_push_remote",
+            "version_control.create_pull_request requires version_control.push_remote=true.",
+        )
+    if version_control.create_pull_request and not version_control.create_branch:
+        result.add_issue(
+            "error",
+            "create_pr_requires_branch",
+            "version_control.create_pull_request requires version_control.create_branch=true.",
         )
     if version_control.commit_accepted_changes and not version_control.enabled:
         result.add_issue(
@@ -145,6 +150,22 @@ def _validate_version_control(contract: OptimizationContract, result: Validation
             "warning",
             "protected_branch_execution",
             "Contract disables optimization branch creation while targeting a protected default branch.",
+        )
+
+    if version_control.push_remote or version_control.create_pull_request:
+        remotes = list_remotes(contract.workspace_path)
+        if version_control.remote_name not in remotes:
+            result.add_issue(
+                "error",
+                "missing_git_remote",
+                f"Configured Git remote '{version_control.remote_name}' does not exist in the workspace repository.",
+            )
+
+    if version_control.create_pull_request and not is_gh_available():
+        result.add_issue(
+            "error",
+            "gh_not_available",
+            "GitHub CLI is required when version_control.create_pull_request=true, but `gh` is not available.",
         )
 
 

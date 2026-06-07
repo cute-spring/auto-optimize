@@ -85,6 +85,60 @@ def metric_improvement(
     raise ValueError(f"Unsupported metric direction: {definition.direction}")
 
 
+def tracked_metric_definitions(contract: OptimizationContract) -> list[MetricDefinition]:
+    seen: set[str] = set()
+    ordered: list[MetricDefinition] = []
+    for definition in [contract.metrics.primary, *contract.metrics.secondary]:
+        if definition.name in seen:
+            continue
+        seen.add(definition.name)
+        ordered.append(definition)
+    return ordered
+
+
+def dominates(
+    left_metrics: dict[str, Any],
+    right_metrics: dict[str, Any],
+    definitions: list[MetricDefinition],
+) -> bool:
+    better_or_equal_all = True
+    strictly_better = False
+
+    for definition in definitions:
+        if definition.name not in left_metrics or definition.name not in right_metrics:
+            return False
+
+        left_value = left_metrics[definition.name]
+        right_value = right_metrics[definition.name]
+        if definition.direction == "maximize":
+            if left_value < right_value:
+                better_or_equal_all = False
+                break
+            if left_value > right_value:
+                strictly_better = True
+            continue
+
+        if definition.direction == "minimize":
+            if left_value > right_value:
+                better_or_equal_all = False
+                break
+            if left_value < right_value:
+                strictly_better = True
+            continue
+
+        raise ValueError(f"Unsupported metric direction: {definition.direction}")
+
+    return better_or_equal_all and strictly_better
+
+
+def is_non_dominated(
+    frontier_metrics: list[dict[str, Any]],
+    candidate_metrics: dict[str, Any],
+    definitions: list[MetricDefinition],
+) -> bool:
+    return not any(dominates(existing_metrics, candidate_metrics, definitions) for existing_metrics in frontier_metrics)
+
+
 def decide_candidate(
     contract: OptimizationContract,
     baseline_metrics: dict[str, Any],

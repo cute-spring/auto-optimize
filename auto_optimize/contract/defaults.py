@@ -23,6 +23,8 @@ def apply_contract_defaults(contract: OptimizationContract) -> OptimizationContr
         contract.report.output_dir = "auto_optimize_outputs"
     if not contract.run_policy.max_experiments:
         contract.run_policy.max_experiments = 10
+    if not contract.run_policy.search_strategy:
+        contract.run_policy.search_strategy = "one_variable"
     if not contract.pareto.profiles:
         contract.pareto.profiles = [
             "accuracy_first",

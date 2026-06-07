@@ -1,0 +1,14 @@
+{
+  "q1": {
+    "default": [],
+    "retrieval_query_prefix": ["reduces", "adults"]
+  },
+  "q2": {
+    "default": [],
+    "retrieval_query_prefix": ["efficiency", "materials"]
+  },
+  "q3": {
+    "default": [],
+    "retrieval_query_prefix": ["supports", "cardiovascular"]
+  }
+}

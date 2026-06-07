@@ -1,0 +1,17 @@
+{
+  "q1": {
+    "raw_query": [],
+    "normalized_query": ["胸闷", "检查"],
+    "faq_style_query": ["发热", "检查", "医院"]
+  },
+  "q2": {
+    "raw_query": [],
+    "normalized_query": ["盐分", "作息"],
+    "faq_style_query": ["盐分", "作息", "饮食"]
+  },
+  "q3": {
+    "raw_query": [],
+    "normalized_query": ["药物", "说明"],
+    "faq_style_query": ["药物", "说明", "空腹"]
+  }
+}

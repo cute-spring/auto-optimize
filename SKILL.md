@@ -43,7 +43,7 @@ Use this skill when the user wants to improve a project component through contro
 - Record Git state before the run and branch when configured.
 - Commit accepted experiments only when configured.
 - Roll back rejected experiments safely.
-- Never push to remote or create pull requests in MVP.
+- Only push to remote or create pull requests when explicitly enabled in the contract and the repository satisfies the required Git prerequisites.
 
 ## Recommended Workflow
 
@@ -61,6 +61,9 @@ Use this skill when the user wants to improve a project component through contro
 ```bash
 python -m auto_optimize.cli validate examples/faq_retrieval/optimization.contract.yaml
 python -m auto_optimize.cli advisor --workspace ./project --scenario faq_retrieval
+python -m auto_optimize.cli build --workspace ./project --scenario faq_retrieval
+python -m auto_optimize.cli guided --workspace ./project
+python -m auto_optimize.cli template --json
 python -m auto_optimize.cli run optimization.contract.yaml
 python -m auto_optimize.cli report auto_optimize_outputs/experiment_log.jsonl
 ```
@@ -69,6 +72,7 @@ python -m auto_optimize.cli report auto_optimize_outputs/experiment_log.jsonl
 
 - `auto_optimize_outputs/contract_validation_report.md`
 - `auto_optimize_outputs/optimization.contract.draft.yaml`
+- `auto_optimize_outputs/optimization.contract.generated.yaml`
 - `auto_optimize_outputs/readiness_report.json`
 - `auto_optimize_outputs/experiment_log.jsonl`
 - `auto_optimize_outputs/experiment_log.csv`

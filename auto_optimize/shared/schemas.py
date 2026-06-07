@@ -66,6 +66,8 @@ class ParetoConfig:
 class RunPolicy:
     max_experiments: int = 10
     stop_if_no_improvement_rounds: int = 3
+    search_strategy: str = "one_variable"
+    max_pairwise_candidates: int = 12
     random_seed: int = 42
     dry_run: bool = False
     max_runtime_minutes: int | None = None
@@ -81,8 +83,10 @@ class VersionControlConfig:
     commit_accepted_changes: bool = False
     rollback_rejected_changes: bool = True
     branch_prefix: str = "auto-optimize/"
+    remote_name: str = "origin"
     push_remote: bool = False
     create_pull_request: bool = False
+    pull_request_draft: bool = True
     commit_message_template: str | None = None
 
 

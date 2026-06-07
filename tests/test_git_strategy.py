@@ -79,11 +79,27 @@ def test_dirty_worktree_blocks_validation_when_required(tmp_path: Path) -> None:
 
 def test_remote_git_operations_are_blocked_in_mvp(tmp_path: Path) -> None:
     def mutate(data, workspace):
-        data["version_control"]["enabled"] = False
+        _init_git_repo(workspace)
+        data["version_control"]["enabled"] = True
         data["version_control"]["push_remote"] = True
-        data["version_control"]["create_pull_request"] = True
+        data["version_control"]["remote_name"] = "origin"
 
     result = _validate(tmp_path, mutate=mutate)
 
     assert not result.valid
-    assert any(issue.code == "unsupported_remote_git_operation" for issue in result.issues)
+    assert any(issue.code == "missing_git_remote" for issue in result.issues)
+
+
+def test_pull_request_requires_push_remote_and_branch(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        _init_git_repo(workspace)
+        data["version_control"]["enabled"] = True
+        data["version_control"]["create_pull_request"] = True
+        data["version_control"]["push_remote"] = False
+        data["version_control"]["create_branch"] = False
+
+    result = _validate(tmp_path, mutate=mutate)
+
+    assert not result.valid
+    assert any(issue.code == "create_pr_requires_push_remote" for issue in result.issues)
+    assert any(issue.code == "create_pr_requires_branch" for issue in result.issues)

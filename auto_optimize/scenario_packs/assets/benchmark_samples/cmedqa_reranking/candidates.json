@@ -1,0 +1,23 @@
+{
+  "q1": [
+    {"doc_id": "d1", "baseline_score": 0.73},
+    {"doc_id": "d3", "baseline_score": 0.7},
+    {"doc_id": "d5", "baseline_score": 0.42},
+    {"doc_id": "d2", "baseline_score": 0.36},
+    {"doc_id": "d4", "baseline_score": 0.21}
+  ],
+  "q2": [
+    {"doc_id": "d5", "baseline_score": 0.65},
+    {"doc_id": "d4", "baseline_score": 0.63},
+    {"doc_id": "d1", "baseline_score": 0.31},
+    {"doc_id": "d2", "baseline_score": 0.22},
+    {"doc_id": "d3", "baseline_score": 0.18}
+  ],
+  "q3": [
+    {"doc_id": "d1", "baseline_score": 0.61},
+    {"doc_id": "d2", "baseline_score": 0.59},
+    {"doc_id": "d3", "baseline_score": 0.27},
+    {"doc_id": "d5", "baseline_score": 0.19},
+    {"doc_id": "d4", "baseline_score": 0.16}
+  ]
+}

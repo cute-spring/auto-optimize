@@ -4,10 +4,10 @@ embedding:
   multilingual_normalization: true
   language_hint_mode: auto
   faq_text_fields:
-    - title
-    - question
-    - answer
+  - title
+  - question
+  - answer
   query_processing_steps:
-    - trim
-    - lowercase_ascii
-    - preserve_chinese
+  - trim
+  - lowercase_ascii
+  - preserve_chinese

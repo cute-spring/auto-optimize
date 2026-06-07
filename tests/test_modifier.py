@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 
 from auto_optimize.contract.loader import load_contract
-from auto_optimize.runner.modifier import apply_parameter_value, restore_snapshot
+from auto_optimize.runner.modifier import CandidateChange, apply_candidate_changes, apply_parameter_value, restore_snapshot
 from auto_optimize.shared.schemas import SearchSpaceMapping
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -95,3 +95,39 @@ def test_apply_parameter_value_updates_json_and_restores_snapshot(tmp_path: Path
     restore_snapshot(contract, snapshot)
     restored = json.loads(json_path.read_text(encoding="utf-8"))
     assert restored["candidate"]["temperature"] == 0.1
+
+
+def test_apply_candidate_changes_updates_same_yaml_file_and_restores_snapshots(tmp_path: Path) -> None:
+    contract = _materialize_contract(tmp_path)
+
+    top_k_mapping = contract.search_space["top_k"].mapping
+    threshold_mapping = contract.search_space["threshold"].mapping
+    changes, snapshots = apply_candidate_changes(
+        contract,
+        [
+            CandidateChange(
+                parameter="top_k",
+                value=20,
+                mapping=top_k_mapping,
+                current_value=10,
+            ),
+            CandidateChange(
+                parameter="threshold",
+                value=0.78,
+                mapping=threshold_mapping,
+                current_value=0.82,
+            ),
+        ],
+    )
+
+    updated = yaml.safe_load((tmp_path / "workspace" / "configs" / "retrieval.yaml").read_text(encoding="utf-8"))
+
+    assert len(changes) == 2
+    assert len(snapshots) == 1
+    assert updated["retrieval"]["top_k"] == 20
+    assert updated["retrieval"]["threshold"] == 0.78
+
+    restore_snapshot(contract, snapshots[0])
+    restored = yaml.safe_load((tmp_path / "workspace" / "configs" / "retrieval.yaml").read_text(encoding="utf-8"))
+    assert restored["retrieval"]["top_k"] == 10
+    assert restored["retrieval"]["threshold"] == 0.82

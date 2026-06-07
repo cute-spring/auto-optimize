@@ -58,6 +58,12 @@ def generate_markdown_report(summary: dict[str, Any], baseline_metrics: dict[str
         for key, value in sorted(summary["best_metrics"].items()):
             lines.append(f"- `{key}`: `{value}`")
 
+    final_workspace_metrics = summary.get("final_workspace_metrics")
+    if final_workspace_metrics:
+        lines.extend(["", "## Final Workspace Metrics", ""])
+        for key, value in sorted(final_workspace_metrics.items()):
+            lines.append(f"- `{key}`: `{value}`")
+
     lines.extend(["", "## Baseline vs Best", ""])
     for key, best_value in sorted(summary["best_metrics"].items()):
         baseline_value = summary["baseline_metrics"].get(key)
@@ -75,11 +81,41 @@ def generate_markdown_report(summary: dict[str, Any], baseline_metrics: dict[str
         lines.append("- No accepted candidates in this run.")
     else:
         for candidate in accepted_candidates:
+            candidate_label = candidate.get("parameter") or ", ".join(candidate.get("parameters", []))
+            candidate_value = candidate.get("value", candidate.get("candidate"))
             lines.append(
                 "- "
-                f"`{candidate['experiment_id']}` changed `{candidate['parameter']}` to `{candidate['value']}` "
+                f"`{candidate['experiment_id']}` changed `{candidate_label}` to `{candidate_value}` "
                 f"and moved `{primary_name}` from `{candidate['primary_metric_before']}` to "
                 f"`{candidate['primary_metric_after']}` (delta `{_format_delta(candidate['primary_metric_improvement'])}`)."
+            )
+
+    benchmark_context = summary.get("benchmark_context")
+    if benchmark_context:
+        lines.extend(["", "## Benchmark Context", ""])
+        for key in (
+            "dataset_key",
+            "scenario_family",
+            "data_source",
+            "dataset_available_locally",
+            "source_root",
+            "provider_mode",
+            "provider_model_name",
+        ):
+            lines.append(f"- `{key}`: `{benchmark_context.get(key)}`")
+
+    pareto_frontier = summary.get("pareto_frontier", [])
+    if summary.get("pareto_enabled"):
+        lines.extend(["", "## Pareto Frontier", ""])
+        lines.append(f"- Enabled: `{summary.get('pareto_enabled')}`")
+        lines.append(f"- Profiles: `{summary.get('pareto_profiles', [])}`")
+        lines.append(f"- Frontier points: `{len(pareto_frontier)}`")
+        for entry in pareto_frontier:
+            lines.append(
+                "- "
+                f"`{entry['experiment_id']}` decision `{entry['decision']}` "
+                f"candidate `{entry['candidate']}` "
+                f"primary `{entry['metrics'].get(primary_name)}`"
             )
 
     memory = summary.get("memory")
@@ -96,7 +132,7 @@ def generate_markdown_report(summary: dict[str, Any], baseline_metrics: dict[str
             "",
             "## Notes",
             "",
-            "- This MVP run evaluates the baseline, applies one-variable-at-a-time candidates, records decisions, and updates experiment memory.",
+            f"- This MVP run evaluates the baseline, applies the `{summary.get('search_strategy', 'one_variable')}` candidate strategy, records decisions, and updates experiment memory.",
             "- Rejected candidates are rolled back with file snapshots. Accepted candidates may also be committed through the Git layer when enabled.",
             "",
             "## Output Artifacts",

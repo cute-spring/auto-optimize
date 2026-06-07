@@ -1,1 +1,1 @@
-"""Contract builder scaffolding for future AutoOptimize phases."""
+"""Contract builder helpers for Guided and Template workflows."""

@@ -124,3 +124,13 @@ def test_commit_requires_version_control(tmp_path: Path) -> None:
 
     assert not result.valid
     assert any(issue.code == "commit_requires_version_control" for issue in result.issues)
+
+
+def test_unsupported_search_strategy_fails(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        data["run_policy"]["search_strategy"] = "bayesian"
+
+    _, result = _validate(tmp_path, mutate=mutate)
+
+    assert not result.valid
+    assert any(issue.code == "unsupported_search_strategy" for issue in result.issues)

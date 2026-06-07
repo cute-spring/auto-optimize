@@ -28,6 +28,13 @@ def _init_git_repo(workspace: Path) -> None:
     _run(["git", "commit", "-m", "initial"], cwd=workspace)
 
 
+def _init_git_remote(tmp_path: Path, workspace: Path) -> Path:
+    remote_path = tmp_path / "remote.git"
+    _run(["git", "init", "--bare", str(remote_path)], cwd=tmp_path)
+    _run(["git", "remote", "add", "origin", str(remote_path)], cwd=workspace)
+    return remote_path
+
+
 def _reset_workspace_fixture(workspace: Path) -> None:
     output_dir = workspace / "auto_optimize_outputs"
     if output_dir.exists():
@@ -93,6 +100,8 @@ def test_run_command_writes_baseline_artifacts(tmp_path: Path) -> None:
     best_run_path = output_dir / "best_run_snapshot.json"
     md_report_path = output_dir / "optimization_report.md"
     validation_report_path = output_dir / "contract_validation_report.md"
+    pareto_frontier_path = output_dir / "pareto_frontier.json"
+    pareto_snapshot_dir = output_dir / "pareto_frontier_snapshots"
 
     assert run_summary_path.exists()
     assert jsonl_path.exists()
@@ -101,12 +110,17 @@ def test_run_command_writes_baseline_artifacts(tmp_path: Path) -> None:
     assert best_run_path.exists()
     assert md_report_path.exists()
     assert validation_report_path.exists()
+    assert pareto_frontier_path.exists()
+    assert pareto_snapshot_dir.exists()
 
     summary = json.loads(run_summary_path.read_text(encoding="utf-8"))
     assert summary["status"] == "completed"
     assert summary["baseline_metrics"]["top1_accuracy"] == 0.892
     assert summary["best_metrics"]["top1_accuracy"] == 0.909
+    assert summary["final_workspace_metrics"]["top1_accuracy"] == 0.909
     assert summary["constraints_satisfied"] is True
+    assert summary["pareto_enabled"] is True
+    assert len(summary["pareto_frontier"]) >= 1
     assert summary["experiments_run"] == 10
     assert summary["accepted_experiments"] == 4
     assert summary["rejected_experiments"] == 6
@@ -125,11 +139,13 @@ def test_run_command_writes_baseline_artifacts(tmp_path: Path) -> None:
     assert records[0]["decision"] == "baseline"
     assert any(record["decision"] == "accepted" for record in records[1:])
     assert any(record["rollback_performed"] for record in records[1:])
+    assert (pareto_snapshot_dir / "baseline" / "configs" / "retrieval.yaml").exists()
 
     report_text = md_report_path.read_text(encoding="utf-8")
     assert "Baseline Metrics" in report_text
     assert "Best Metrics" in report_text
     assert "Accepted Experiments" in report_text
+    assert "Pareto Frontier" in report_text
     assert "Experiment Memory" in report_text
     assert "top1_accuracy" in report_text
 
@@ -145,6 +161,40 @@ def test_run_command_writes_baseline_artifacts(tmp_path: Path) -> None:
     assert embedding_config["embedding"]["faq_template"] == "question_title_answer_bilingual"
     assert embedding_config["embedding"]["query_template"] == "bilingual_expansion"
     assert embedding_config["embedding"]["multilingual_normalization"] is True
+
+
+def test_run_command_records_rejected_points_in_pareto_frontier(tmp_path: Path) -> None:
+    contract_path = _materialize_contract(tmp_path)
+
+    exit_code = main(["run", str(contract_path)])
+
+    assert exit_code == 0
+
+    output_dir = tmp_path / "workspace" / "auto_optimize_outputs"
+    summary = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
+    pareto_snapshot_dir = output_dir / "pareto_frontier_snapshots"
+
+    assert any(entry["decision"] == "rejected" for entry in summary["pareto_frontier"])
+    rejected_entry = next(entry for entry in summary["pareto_frontier"] if entry["decision"] == "rejected")
+    assert (pareto_snapshot_dir / rejected_entry["experiment_id"] / "metadata.json").exists()
+
+
+def test_run_command_supports_pareto_frontier_decision_mode(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        data["decision_policy"]["mode"] = "pareto_frontier"
+
+    contract_path = _materialize_contract(tmp_path, mutate=mutate)
+
+    exit_code = main(["run", str(contract_path)])
+
+    assert exit_code == 0
+
+    output_dir = tmp_path / "workspace" / "auto_optimize_outputs"
+    summary = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
+
+    assert summary["accepted_experiments"] >= 4
+    assert summary["final_workspace_metrics"] != summary["baseline_metrics"]
+    assert any(candidate["primary_metric_improvement"] < 0 for candidate in summary["accepted_candidates"])
 
 
 def test_run_command_fails_when_validation_fails(tmp_path: Path) -> None:
@@ -223,6 +273,101 @@ def test_run_command_creates_branch_and_commits_accepted_changes(tmp_path: Path)
     assert "auto-optimize: exp_0002" in commit_subject
     assert commit_count == 2
     assert retrieval_config["retrieval"]["top_k"] == 20
+
+
+def test_run_command_can_push_accepted_branch_to_remote(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        _init_git_repo(workspace)
+        remote_path = _init_git_remote(tmp_path, workspace)
+        data["version_control"]["enabled"] = True
+        data["version_control"]["require_clean_worktree"] = True
+        data["version_control"]["create_branch"] = True
+        data["version_control"]["commit_accepted_changes"] = True
+        data["version_control"]["push_remote"] = True
+        data["version_control"]["remote_name"] = "origin"
+        data["version_control"]["branch_prefix"] = "auto-optimize-test/"
+        data["run_policy"]["max_experiments"] = 2
+        data.setdefault("test_context", {})
+        data["test_context"]["remote_path"] = str(remote_path)
+
+    contract_path = _materialize_contract(tmp_path, mutate=mutate)
+
+    exit_code = main(["run", str(contract_path)])
+
+    assert exit_code == 0
+
+    workspace = tmp_path / "workspace"
+    output_dir = workspace / "auto_optimize_outputs"
+    summary = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
+    remote_path = Path(yaml.safe_load(contract_path.read_text(encoding="utf-8"))["test_context"]["remote_path"])
+    remote_branches = _run(["git", "--git-dir", str(remote_path), "branch", "--list"], cwd=workspace)
+
+    assert summary["git"]["pushed_remote_branch"].startswith("origin/auto-optimize-test/")
+    assert "auto-optimize-test/" in remote_branches
+
+
+def test_run_command_can_create_pull_request_when_enabled(tmp_path: Path, monkeypatch) -> None:
+    import auto_optimize.runner.orchestrator as orchestrator_module
+
+    def mutate(data, workspace):
+        _init_git_repo(workspace)
+        _init_git_remote(tmp_path, workspace)
+        data["version_control"]["enabled"] = True
+        data["version_control"]["require_clean_worktree"] = True
+        data["version_control"]["create_branch"] = True
+        data["version_control"]["commit_accepted_changes"] = True
+        data["version_control"]["push_remote"] = True
+        data["version_control"]["create_pull_request"] = True
+        data["version_control"]["remote_name"] = "origin"
+        data["version_control"]["branch_prefix"] = "auto-optimize-test/"
+        data["run_policy"]["max_experiments"] = 2
+
+    monkeypatch.setattr(
+        orchestrator_module,
+        "create_pull_request",
+        lambda workspace_path, base_branch, head_branch, title, body, draft: "https://example.test/pr/123",
+    )
+
+    contract_path = _materialize_contract(tmp_path, mutate=mutate)
+
+    exit_code = main(["run", str(contract_path)])
+
+    assert exit_code == 0
+
+    summary = json.loads(((tmp_path / "workspace" / "auto_optimize_outputs") / "run_summary.json").read_text(encoding="utf-8"))
+    assert summary["git"]["pull_request_url"] == "https://example.test/pr/123"
+
+
+def test_run_command_supports_pairwise_search_strategy(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        data["run_policy"]["search_strategy"] = "pairwise"
+        data["run_policy"]["max_pairwise_candidates"] = 3
+        data["run_policy"]["max_experiments"] = 3
+        data["run_policy"]["stop_if_no_improvement_rounds"] = 3
+
+    contract_path = _materialize_contract(tmp_path, mutate=mutate)
+
+    exit_code = main(["run", str(contract_path)])
+
+    assert exit_code == 0
+
+    output_dir = tmp_path / "workspace" / "auto_optimize_outputs"
+    summary = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
+    records = [
+        json.loads(line)
+        for line in (output_dir / "experiment_log.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    retrieval_config = yaml.safe_load((tmp_path / "workspace" / "configs" / "retrieval.yaml").read_text(encoding="utf-8"))
+
+    assert summary["search_strategy"] == "pairwise"
+    assert summary["accepted_experiments"] == 1
+    assert summary["rejected_experiments"] == 2
+    assert summary["accepted_candidates"][0]["parameters"] == ["top_k", "threshold"]
+    assert records[1]["parameters"] == ["top_k", "threshold"]
+    assert len(records[1]["changes"]) == 2
+    assert retrieval_config["retrieval"]["top_k"] == 20
+    assert retrieval_config["retrieval"]["threshold"] == 0.78
 
 
 def test_report_command_regenerates_markdown_report(tmp_path: Path) -> None:

@@ -34,6 +34,8 @@ class GitRunContext:
     initial_state: dict[str, object] | None
     branch_created: bool = False
     working_branch: str | None = None
+    pushed_remote_branch: str | None = None
+    pull_request_url: str | None = None
     commits: list[str] | None = None
 
     def as_dict(self) -> dict[str, object]:
@@ -42,6 +44,8 @@ class GitRunContext:
             "initial_state": self.initial_state,
             "branch_created": self.branch_created,
             "working_branch": self.working_branch,
+            "pushed_remote_branch": self.pushed_remote_branch,
+            "pull_request_url": self.pull_request_url,
             "commits": list(self.commits or []),
         }
 
@@ -58,6 +62,10 @@ class GitOperationError(Exception):
 
 def is_git_available() -> bool:
     return shutil.which("git") is not None
+
+
+def is_gh_available() -> bool:
+    return shutil.which("gh") is not None
 
 
 def _run_git(workspace_path: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -116,6 +124,63 @@ def commit_files(workspace_path: Path, files: list[str], message: str) -> str:
             hint=hint,
         )
     return head
+
+
+def list_remotes(workspace_path: Path) -> list[str]:
+    completed = _require_git_success(workspace_path, ["remote"])
+    return [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+
+
+def push_branch(workspace_path: Path, remote_name: str, branch_name: str) -> str:
+    _require_git_success(workspace_path, ["push", "-u", remote_name, branch_name])
+    return f"{remote_name}/{branch_name}"
+
+
+def create_pull_request(
+    workspace_path: Path,
+    base_branch: str,
+    head_branch: str,
+    title: str,
+    body: str,
+    draft: bool,
+) -> str:
+    if not is_gh_available():
+        raise GitOperationError(
+            code="gh_not_available",
+            message="GitHub CLI is required to create a pull request, but `gh` is not available.",
+        )
+
+    args = [
+        "gh",
+        "pr",
+        "create",
+        "--base",
+        base_branch,
+        "--head",
+        head_branch,
+        "--title",
+        title,
+        "--body",
+        body,
+    ]
+    if draft:
+        args.append("--draft")
+
+    completed = subprocess.run(
+        args,
+        cwd=workspace_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        hint = completed.stderr.strip() or completed.stdout.strip() or None
+        raise GitOperationError(
+            code="create_pull_request_failed",
+            message="Failed to create a pull request with GitHub CLI.",
+            hint=hint,
+        )
+    return completed.stdout.strip().splitlines()[-1].strip()
 
 
 def inspect_git_repo(workspace_path: Path) -> GitRepoState:

@@ -107,8 +107,8 @@ The runner turns a validated contract into actual experiments.
 Current MVP flow:
 
 1. Run baseline evaluation.
-2. Generate one-variable-at-a-time candidates from `search_space`.
-3. Modify the target YAML/JSON config field.
+2. Generate candidates from `search_space` using the configured `search_strategy`.
+3. Modify one or more target YAML/JSON config fields.
 4. Execute the evaluation command.
 5. Compare metrics against the current best result.
 6. Accept or reject the candidate.
