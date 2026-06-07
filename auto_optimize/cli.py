@@ -6,8 +6,10 @@ from pathlib import Path
 
 from auto_optimize.advisor.service import run_advisor
 from auto_optimize.builder.service import build_contract, list_available_templates
+from auto_optimize.contract.explainer import expanded_contract_data, load_raw_contract_data, write_contract_explanation
 from auto_optimize.contract.loader import load_contract
 from auto_optimize.contract.validator import validate_contract, write_validation_report
+from auto_optimize.declaration import load_declaration, write_contract_from_declaration
 from auto_optimize.reporting.report_generator import generate_html_report, generate_markdown_report, load_summary_for_report
 from auto_optimize.runner.orchestrator import run_contract
 
@@ -22,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     advisor_parser = subparsers.add_parser("advisor", help="Generate a draft contract and readiness report for a workspace")
     advisor_parser.add_argument("--workspace", required=True)
     advisor_parser.add_argument("--scenario", required=False)
+    advisor_parser.add_argument("--style", choices=["minimal", "expanded"], default="minimal")
 
     build_parser = subparsers.add_parser("build", help="Build a contract from a scenario template and metric profile")
     build_parser.add_argument("--workspace", required=True)
@@ -29,15 +32,26 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--metric-profile", required=False)
     build_parser.add_argument("--benchmark-key", required=False)
     build_parser.add_argument("--output", required=False)
+    build_parser.add_argument("--style", choices=["minimal", "expanded"], default="expanded")
 
     guided_parser = subparsers.add_parser("guided", help="Run advisor and build a ready-to-edit generated contract")
     guided_parser.add_argument("--workspace", required=True)
     guided_parser.add_argument("--scenario", required=False)
     guided_parser.add_argument("--metric-profile", required=False)
     guided_parser.add_argument("--output", required=False)
+    guided_parser.add_argument("--style", choices=["minimal", "expanded"], default="minimal")
 
     template_parser = subparsers.add_parser("template", help="List available scenario templates and metric profiles")
     template_parser.add_argument("--json", action="store_true")
+
+    explain_parser = subparsers.add_parser("explain-contract", help="Write a human-readable explanation of a contract")
+    explain_parser.add_argument("contract", help="Path to optimization.contract.yaml")
+    explain_parser.add_argument("--output", required=False)
+    explain_parser.add_argument("--json", action="store_true")
+
+    declare_parser = subparsers.add_parser("declare", help="Convert a declaration YAML into an executable contract")
+    declare_parser.add_argument("declaration", help="Path to optimization.declaration.yaml")
+    declare_parser.add_argument("--output", required=False, help="Path to write the generated optimization.contract.yaml")
 
     run_parser = subparsers.add_parser("run", help="Run an optimization contract")
     run_parser.add_argument("contract", nargs="?")
@@ -61,7 +75,12 @@ def cmd_validate(contract_arg: str) -> int:
 
     print("Contract validation failed.")
     for issue in result.issues:
-        print(f"- [{issue.severity}] {issue.code}: {issue.message}")
+        detail = f"- [{issue.severity}] {issue.code}: {issue.message}"
+        if issue.field:
+            detail += f" Field: {issue.field}."
+        if issue.hint:
+            detail += f" Hint: {issue.hint}"
+        print(detail)
     return 1
 
 
@@ -81,9 +100,9 @@ def cmd_run(contract_arg: str) -> int:
     return 0
 
 
-def cmd_advisor(workspace_arg: str, scenario_arg: str | None) -> int:
+def cmd_advisor(workspace_arg: str, scenario_arg: str | None, style_arg: str) -> int:
     try:
-        result = run_advisor(workspace_arg, scenario=scenario_arg)
+        result = run_advisor(workspace_arg, scenario=scenario_arg, contract_style=style_arg)
     except ValueError as exc:
         print(str(exc))
         return 1
@@ -91,6 +110,7 @@ def cmd_advisor(workspace_arg: str, scenario_arg: str | None) -> int:
     print(f"Draft contract: {result.draft_contract_path}")
     print(f"Readiness report: {result.readiness_report_path}")
     print(f"Readiness status: {result.readiness_report['status']}")
+    print(f"Recommended contract style: {result.readiness_report['recommended_contract_style']}")
     return 0
 
 
@@ -100,6 +120,7 @@ def cmd_build(
     metric_profile_arg: str | None,
     benchmark_key_arg: str | None,
     output_arg: str | None,
+    style_arg: str,
 ) -> int:
     try:
         result = build_contract(
@@ -108,6 +129,7 @@ def cmd_build(
             metric_profile=metric_profile_arg,
             benchmark_key=benchmark_key_arg,
             output_path=output_arg,
+            contract_style=style_arg,
         )
     except ValueError as exc:
         print(str(exc))
@@ -116,6 +138,7 @@ def cmd_build(
     print(f"Generated contract: {result.contract_path}")
     print(f"Scenario: {result.scenario}")
     print(f"Metric profile: {result.metric_profile}")
+    print(f"Contract style: {result.contract_style}")
     if result.benchmark_key:
         print(f"Benchmark key: {result.benchmark_key}")
     return 0
@@ -126,9 +149,10 @@ def cmd_guided(
     scenario_arg: str | None,
     metric_profile_arg: str | None,
     output_arg: str | None,
+    style_arg: str,
 ) -> int:
     try:
-        advisor_result = run_advisor(workspace_arg, scenario=scenario_arg)
+        advisor_result = run_advisor(workspace_arg, scenario=scenario_arg, contract_style=style_arg)
         chosen_scenario = advisor_result.readiness_report["scenario_type"]
         chosen_metric_profile = metric_profile_arg or advisor_result.readiness_report["recommended_metric_profile"]
         build_result = build_contract(
@@ -136,6 +160,7 @@ def cmd_guided(
             scenario=chosen_scenario,
             metric_profile=chosen_metric_profile,
             output_path=output_arg,
+            contract_style=style_arg,
         )
     except ValueError as exc:
         print(str(exc))
@@ -145,6 +170,7 @@ def cmd_guided(
     print(f"Generated contract: {build_result.contract_path}")
     print(f"Scenario: {build_result.scenario}")
     print(f"Metric profile: {build_result.metric_profile}")
+    print(f"Contract style: {build_result.contract_style}")
     print("Next step: validate the generated contract before run mode.")
     return 0
 
@@ -164,6 +190,36 @@ def cmd_template(json_output: bool) -> int:
     print("Available benchmark datasets:")
     for dataset in payload["benchmark_datasets"]:
         print(f"- {dataset}")
+    return 0
+
+
+def cmd_explain_contract(contract_arg: str, output_arg: str | None, json_output: bool) -> int:
+    contract_path = Path(contract_arg).resolve()
+    raw_data = load_raw_contract_data(contract_path)
+    contract = load_contract(contract_path)
+
+    if json_output:
+        print(json.dumps(expanded_contract_data(contract), indent=2, ensure_ascii=False))
+        return 0
+
+    report_path = write_contract_explanation(contract, raw_data, output_path=output_arg)
+    print(f"Contract explanation: {report_path}")
+    return 0
+
+
+def cmd_declare(declaration_arg: str, output_arg: str | None) -> int:
+    declaration_path = Path(declaration_arg).resolve()
+    try:
+        declaration = load_declaration(declaration_path)
+        contract_path = write_contract_from_declaration(declaration, output_arg)
+    except ValueError as exc:
+        print(str(exc))
+        return 1
+
+    print(f"Generated contract: {contract_path}")
+    print(f"Source declaration: {declaration_path}")
+    print(f"Resolved workspace: {declaration.workspace_path}")
+    print("Next step: validate the generated contract before run mode.")
     return 0
 
 
@@ -202,13 +258,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "validate":
         return cmd_validate(args.contract)
     if args.command == "advisor":
-        return cmd_advisor(args.workspace, args.scenario)
+        return cmd_advisor(args.workspace, args.scenario, args.style)
     if args.command == "build":
-        return cmd_build(args.workspace, args.scenario, args.metric_profile, args.benchmark_key, args.output)
+        return cmd_build(args.workspace, args.scenario, args.metric_profile, args.benchmark_key, args.output, args.style)
     if args.command == "guided":
-        return cmd_guided(args.workspace, args.scenario, args.metric_profile, args.output)
+        return cmd_guided(args.workspace, args.scenario, args.metric_profile, args.output, args.style)
     if args.command == "template":
         return cmd_template(args.json)
+    if args.command == "explain-contract":
+        return cmd_explain_contract(args.contract, args.output, args.json)
+    if args.command == "declare":
+        return cmd_declare(args.declaration, args.output)
     if args.command == "run":
         return cmd_run(args.contract)
     if args.command == "report":

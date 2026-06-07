@@ -1,0 +1,68 @@
+schema_version: "0.1"
+
+workspace:
+  path: "../faq_retrieval/workspace"
+
+objective:
+  description: "Improve reference-workspace retrieval quality while keeping latency bounded."
+
+variables:
+  - name: top_k
+    kind: yaml_path
+    target: "configs/retrieval.yaml"
+    path: "retrieval.top_k"
+    values: [5, 10, 20]
+
+  - name: threshold
+    kind: yaml_path
+    target: "configs/retrieval.yaml"
+    path: "retrieval.threshold"
+    values: [0.78, 0.82, 0.86]
+
+  - name: reranker_enabled
+    kind: yaml_path
+    target: "configs/reranker.yaml"
+    path: "enabled"
+    values: [false, true]
+
+evaluation:
+  command: "python eval/run_eval.py --json"
+  metrics_source: stdout_json
+  timeout_seconds: 60
+  prepared_inputs:
+    - "data/golden_set.json"
+    - "data/embedding_cases.json"
+
+comparison:
+  primary_metric: top1_accuracy
+  direction: maximize
+  min_improvement: 0.001
+  secondary_metrics:
+    - name: rerank_latency_p95_ms
+      direction: minimize
+
+constraints:
+  rerank_latency_p95_ms:
+    max: 250
+  all_tests_pass:
+    required: true
+
+safety:
+  editable:
+    - "configs/retrieval.yaml"
+    - "configs/reranker.yaml"
+  protected:
+    - "eval/"
+    - "data/"
+  secrets:
+    - ".env"
+
+budget:
+  max_experiments: 8
+  stop_if_no_improvement_rounds: 4
+  search_strategy: one_variable
+  max_runtime_minutes: 30
+  max_failed_evaluations: 3
+
+adapter_generation:
+  allowed: false

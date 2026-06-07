@@ -18,6 +18,7 @@ class ValidationResult:
     issues: list[ValidationIssue] = field(default_factory=list)
     baseline_metrics: dict[str, Any] | None = None
     git_state: dict[str, Any] | None = None
+    generated_adapters: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def valid(self) -> bool:

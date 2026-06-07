@@ -1,150 +1,111 @@
 # Command Guide
 
-Use this page when you know what stage you are in, but are not sure which command to run next.
+This guide describes the current CLI while keeping the project direction clear: declarations are the user-facing goal, contracts are the current executable form.
 
 ## Start Here
 
-- Use `advisor` when you have a workspace and want AutoOptimize to inspect it.
-- Use `guided` when you want a beginner-friendly path that produces both readiness output and a generated contract.
-- Use `build` when you already know the scenario and want a generated contract from templates.
-- Use `template` when you want to see available scenarios, metric profiles, and benchmark datasets.
-- Use `validate` before `run`.
-- Use `run` when the contract is ready and you want AutoOptimize to execute the bounded optimization loop.
-- Use `report` when you want to regenerate a Markdown report from previous run artifacts.
+- Use `declare` to convert a declaration YAML into the current executable contract format.
+- Use `advisor` to inspect a workspace and draft an executable contract from available clues.
+- Use `guided` to collect missing fields and generate a contract.
+- Use `explain-contract` to understand what a contract will do.
+- Use `validate` before any run.
+- Use `run` when the executable contract is ready.
+- Use `report` to regenerate a Markdown report from run artifacts.
+- Use `template` only for reference discovery. It is not the main product path.
 
 ## Commands
 
-### `advisor`
+### `declare`
 
-When to use it:
+Use it when:
 
-- you have a workspace but not a contract yet
-- you want AutoOptimize to inspect files and suggest the next action
-
-Typical command:
+- you already know the objective, variables, safety boundaries, evaluation command, and comparison rule
+- you want the current contract generated from that declaration
 
 ```bash
-python -m auto_optimize.cli advisor --workspace examples/faq_retrieval/workspace
+python -m auto_optimize.cli declare optimization.declaration.yaml --output optimization.contract.yaml
 ```
 
-Outputs:
+### `advisor`
 
-- `optimization.contract.draft.yaml`
-- `readiness_report.json`
+Use it when:
+
+- you have a workspace
+- you want AutoOptimize to infer a starting point
+- you understand that current inference is transitional and may still use reference scenarios
+
+```bash
+python -m auto_optimize.cli advisor --workspace /path/to/workspace
+```
 
 ### `guided`
 
-When to use it:
+Use it when:
 
-- you want the easiest onboarding path
-- you want readiness inspection plus a generated contract in one pass
-
-Typical command:
+- you want a generated contract from a workspace
+- you want a smaller authoring-oriented contract with `--style minimal`
 
 ```bash
-python -m auto_optimize.cli guided --workspace examples/faq_retrieval/workspace
+python -m auto_optimize.cli guided --workspace /path/to/workspace --style minimal
 ```
 
-Outputs:
+### `explain-contract`
 
-- `readiness_report.json`
-- `optimization.contract.generated.yaml`
+Use it when:
 
-### `build`
-
-When to use it:
-
-- you want a generated contract from a known scenario template
-- you want to pick a metric profile explicitly
-
-Typical command:
+- you want to understand editable scope, protected scope, variables, metrics, and defaults
 
 ```bash
-python -m auto_optimize.cli build \
-  --workspace examples/faq_retrieval/workspace \
-  --scenario faq_retrieval \
-  --metric-profile faq_metrics
+python -m auto_optimize.cli explain-contract optimization.contract.yaml
 ```
 
-Output:
+### `validate`
 
-- `optimization.contract.generated.yaml`
+Use it when:
+
+- you have an executable contract
+- you want safety and evaluation readiness checks before mutation
+
+```bash
+python -m auto_optimize.cli validate optimization.contract.yaml
+```
+
+### `run`
+
+Use it when:
+
+- validation passes
+- the editable variables and evaluation method are correct
+
+```bash
+python -m auto_optimize.cli run optimization.contract.yaml
+```
+
+### `report`
+
+Use it when:
+
+- you have prior run artifacts and want to rebuild the Markdown report
+
+```bash
+python -m auto_optimize.cli report auto_optimize_outputs
+```
 
 ### `template`
 
-When to use it:
-
-- you want to discover supported scenarios and profiles
-
-Typical command:
+Use it only for reference assets:
 
 ```bash
 python -m auto_optimize.cli template --json
 ```
 
-### `validate`
+Templates and reference scenarios are examples, not the target architecture.
 
-When to use it:
-
-- you have a contract and want to check workspace safety and eval readiness before running optimization
-
-Typical command:
+## Current Transitional Flow
 
 ```bash
-python -m auto_optimize.cli validate examples/faq_retrieval/optimization.contract.yaml
-```
-
-Output:
-
-- `contract_validation_report.md`
-
-### `run`
-
-When to use it:
-
-- the contract validates successfully
-- you want AutoOptimize to execute baseline plus candidate evaluations
-
-Typical command:
-
-```bash
-python -m auto_optimize.cli run examples/faq_retrieval/optimization.contract.yaml
-```
-
-Outputs:
-
-- `experiment_log.jsonl`
-- `run_summary.json`
-- `optimization_report.md`
-- `run_history.jsonl`
-- `best_run_snapshot.json`
-
-### `report`
-
-When to use it:
-
-- you already have run artifacts and want to rebuild the Markdown report
-
-Typical command:
-
-```bash
-python -m auto_optimize.cli report examples/faq_retrieval/workspace/auto_optimize_outputs
-```
-
-## Common Flows
-
-First run with a checked-in example:
-
-```bash
-python -m auto_optimize.cli advisor --workspace examples/faq_retrieval/workspace
-python -m auto_optimize.cli validate examples/faq_retrieval/optimization.contract.yaml
-python -m auto_optimize.cli run examples/faq_retrieval/optimization.contract.yaml
-```
-
-Beginner path for your own compatible workspace:
-
-```bash
-python -m auto_optimize.cli guided --workspace /path/to/workspace
-python -m auto_optimize.cli validate /path/to/workspace/auto_optimize_outputs/optimization.contract.generated.yaml
-python -m auto_optimize.cli run /path/to/workspace/auto_optimize_outputs/optimization.contract.generated.yaml
+python -m auto_optimize.cli declare /path/to/optimization.declaration.yaml --output /path/to/optimization.contract.yaml
+python -m auto_optimize.cli explain-contract /path/to/optimization.contract.yaml
+python -m auto_optimize.cli validate /path/to/optimization.contract.yaml
+python -m auto_optimize.cli run /path/to/optimization.contract.yaml
 ```

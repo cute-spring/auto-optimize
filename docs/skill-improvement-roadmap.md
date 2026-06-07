@@ -1,267 +1,160 @@
-# AutoOptimize Skill Improvement Roadmap
+# Generic Skill Improvement Roadmap
 
-This roadmap records the next product-oriented improvement plan for AutoOptimize. The goal is not to expand the system for its own sake. The goal is to make the skill easier to start, easier to configure, easier to connect to real user evaluation, and easier to trust after it produces results.
+AutoOptimize is a generic, declaration-driven optimization skill.
 
-## Product Goal
+The project direction is not to build a large catalog of hardcoded scenarios, datasets, providers, or benchmark adapters. Those assets may exist as examples, tests, and reference implementations, but they are not the product center.
 
-AutoOptimize should help a user complete this workflow:
+The product center is a generic workflow:
 
-1. Describe or inspect a workspace.
-2. Generate or author a safe optimization contract.
-3. Validate the contract and evaluation setup.
-4. Run bounded optimization inside the declared safety scope.
-5. Understand whether the result should be adopted, reviewed, or rejected.
-
-The next round should therefore prioritize usability, clarity, evaluation integration, and trust before adding more datasets, providers, or advanced search algorithms.
+1. The user declares the optimization goal.
+2. The user declares what can change and what must not change.
+3. The user declares how evaluation is run and how metrics are read.
+4. The user declares what counts as improvement, regression, or constraint violation.
+5. The skill validates the declaration, generates temporary adapters when useful, runs bounded experiments, compares results, rolls back rejected changes, and reports what happened.
 
 ## Guiding Principles
 
-- Prefer task-oriented workflows over feature inventories.
-- Treat public datasets as validation fixtures, not the core product.
-- Make the smallest useful contract easy to write and explain.
-- Make evaluation integration explicit, testable, and safe.
-- Make reports answer user decision questions, not only list artifacts.
-- Keep optimization strategies explainable before making them more complex.
+- Build for arbitrary user projects, not for a fixed set of scenarios.
+- Prefer user declarations over static templates.
+- Generate temporary adapter code when that lowers setup burden.
+- Treat examples, benchmark fixtures, metric profiles, and provider demos as optional references.
+- Keep safety boundaries explicit before mutation or generated code execution.
+- Respect user-provided algorithms, test commands, and comparison rules before inventing replacements.
+- Ask only when the user has not supplied a decision that materially changes behavior or risk.
 
-## Milestone 1: User Onboarding
-
-### Goal
-
-A new user should be able to understand and run a minimal optimization flow in about ten minutes without reading the full specification.
-
-### Scope
-
-- Write a quickstart that follows the shortest useful path: `advisor -> validate -> run -> report`.
-- Add a command guide that explains when to use `advisor`, `guided`, `build`, `template`, `validate`, `run`, and `report`.
-- Add walkthroughs for the most common entry points:
-  - FAQ configuration optimization.
-  - Embedding or reranking benchmark optimization.
-  - Custom evaluation script integration.
-- Explain expected inputs, commands, generated outputs, and success criteria for each walkthrough.
-- Reframe docs around user tasks instead of internal modules.
-- Add an examples index explaining which example to choose for each scenario.
-
-### Suggested Deliverables
-
-- `docs/quickstart.md`
-- `docs/command-guide.md`
-- `docs/walkthrough-faq.md`
-- `docs/walkthrough-custom-eval.md`
-- `examples/README.md`
-
-### Acceptance Criteria
-
-- A user can run the FAQ example without reading the skill spec.
-- The user can identify the right command for their current stage.
-- Each walkthrough answers: what to prepare, what to run, and what to inspect.
-- The generated outputs are named and explained in plain language.
-
-## Milestone 2: Contract UX
+## Milestone 1: Direction Realignment
 
 ### Goal
 
-A user should be able to generate, inspect, and fix a contract without understanding every field in the full contract schema.
+Make every public project document describe AutoOptimize as a generic declaration-driven skill.
 
 ### Scope
 
-- Define a minimal contract shape with only the fields required to start safely.
-- Define an expanded contract view showing defaults and derived values.
-- Improve contract builder behavior:
-  - Infer editable files from known config locations when safe.
-  - Infer evaluation command candidates from workspace layout.
-  - Recommend metric profile based on scenario.
-  - Suggest reasonable budgets from search space size.
-- Improve validation messages:
-  - Include the contract field or path involved.
-  - Explain why the rule exists.
-  - Give a concrete remediation suggestion.
-- Add an `explain contract` flow or report that describes each section and marks defaults.
-- Add minimal contract examples for FAQ, benchmark, and custom eval scenarios.
-
-### Suggested Deliverables
-
-- `docs/contract-authoring.md`
-- `docs/contract-fields.md`
-- `examples/contracts/minimal_faq.contract.yaml`
-- `examples/contracts/minimal_custom_eval.contract.yaml`
-- CLI: `build` improvements.
-- CLI: `explain-contract` or equivalent report output.
+- Rewrite top-level positioning in `README.md` and `SKILL.md`.
+- Replace static scenario-centric roadmap language.
+- Reframe examples as reference declarations and regression fixtures.
+- Make benchmark and dataset docs clearly secondary.
+- Document the new declaration-first mental model.
 
 ### Acceptance Criteria
 
-- A generated minimal contract can validate without manual schema knowledge.
-- Validation failures are actionable, not just descriptive.
-- Builder-generated contracts are safe by default.
-- A user can identify the five most important contract sections: workspace, editable scope, protected scope, search space, and metrics.
+- No primary document presents FAQ, embedding, reranking, or public datasets as the product direction.
+- Examples are described as optional reference cases.
+- The main onboarding path starts from a user declaration, not from a fixed scenario catalog.
 
-## Milestone 3: Eval Integration
+## Milestone 2: Declaration Protocol
 
 ### Goal
 
-A user should be able to connect their own evaluation script safely and verify that it behaves correctly before running optimization.
+Define the minimal information a user must provide for a generic optimization task.
 
 ### Scope
 
-- Define the evaluation protocol:
-  - Where the eval reads configuration and data from.
-  - Which output formats are supported.
-  - Which metrics are required.
-  - How exit codes and failures are interpreted.
-- Support common output formats:
-  - `metrics.json`
-  - stdout JSON
-  - CSV results plus a metrics summary.
-- Add a smoke-eval command that runs evaluation without modifying any editable files.
-- Validate eval output schema:
-  - Primary metric exists.
-  - Metric values are numeric when expected.
-  - Latency, size, and cost metrics use consistent units.
-- Add optional stability checks:
-  - Run the same eval two or three times.
-  - Report metric variance.
-  - Warn when evaluation is too noisy for optimization.
-- Provide eval templates:
-  - Generic Python eval script.
-  - Retrieval eval script.
-  - Reranking eval script.
-  - Generic config optimization eval script.
-- Strengthen eval safety:
-  - Eval files remain in protected scope.
-  - Eval output writes only to allowed output locations.
-  - Eval does not mutate protected inputs.
-
-### Suggested Deliverables
-
-- `docs/eval-protocol.md`
-- `docs/eval-templates.md`
-- `examples/eval_templates/`
-- CLI: `smoke-eval`
-- Validator support for eval output schema checks.
-- Report section for eval stability.
+- Define a declaration protocol with:
+  - objective
+  - editable variables
+  - protected files and data
+  - evaluation command
+  - metric extraction rule
+  - comparison rule
+  - constraints
+  - budget
+  - optional user-provided algorithm
+- Allow declarations to be authored as YAML, generated from guided conversation, or derived from an existing contract.
+- Keep the protocol natural enough for users who do not know the internal contract schema.
 
 ### Acceptance Criteria
 
-- A user can adapt a template into their own eval script.
-- `smoke-eval` can detect missing or malformed metrics before optimization starts.
-- Validation can flag eval protocol problems with remediation advice.
-- Reports can warn when evaluation is too unstable to support a confident recommendation.
+- A new user can describe a custom task without pretending it is FAQ, embedding, or reranking.
+- The declaration can be converted into an executable contract.
+- Existing examples can be re-expressed as reference declarations.
 
-## Milestone 4: Trustworthy Reports
+## Milestone 3: Dynamic Adapter Generation
 
 ### Goal
 
-A user should be able to read the report and decide whether to adopt the optimized result, review it manually, or reject it.
+Let the skill generate run-specific helper code when the user has supplied enough declarations but not a ready-made adapter.
 
 ### Scope
 
-- Strengthen baseline versus best comparison:
-  - Metric deltas.
-  - Changed parameters.
-  - File diff summary.
-  - Constraint status.
-- Add an experiment decision table:
-  - Candidate id.
-  - Changed parameters.
-  - Result metrics.
-  - Accepted or rejected status.
-  - Decision reason.
-- Add risk flags:
-  - Sample size appears too small.
-  - Primary metric improved but latency, size, or cost worsened.
-  - Metric variance is high.
-  - Best result only slightly improves on baseline.
-  - A rejected candidate performs better on an important secondary metric.
-- Add final recommendation levels:
-  - `adopt`
-  - `review_manually`
-  - `do_not_adopt`
-- Add profile-based summaries:
-  - FAQ profile highlights top-1 accuracy, hit rate, and hard-negative behavior.
-  - Embedding profile highlights recall, nDCG, latency, and index size.
-  - Reranking profile highlights MRR, rerank gain, and reranking latency.
-- Add a machine-readable report schema for CI and other agents.
-
-### Suggested Deliverables
-
-- `docs/reporting.md`
-- `auto_optimize_outputs/optimization_report.md`
-- `auto_optimize_outputs/optimization_report.json`
-- Report section: Baseline vs Best.
-- Report section: Experiment Decisions.
-- Report section: Risk Flags.
-- Report section: Final Recommendation.
+- Generate temporary code for:
+  - evaluation wrappers
+  - metric parsers
+  - config mutation helpers
+  - environment patchers
+  - result comparators
+- Store generated code under the run output directory, not as permanent scenario code.
+- Record generated code in reports so users can inspect what was run.
+- Require confirmation for generated code that edits project code, uses credentials, calls paid services, or performs risky operations.
 
 ### Acceptance Criteria
 
-- The report explains why the final result was selected.
-- The report identifies meaningful risks and tradeoffs.
-- The user can understand the optimization process without reading JSONL logs.
-- Another agent or CI job can consume the structured report.
+- A user does not need to prebuild a full scenario-specific adapter for common cases.
+- Generated code is auditable and scoped.
+- Existing static adapters are treated as examples of what generated adapters may look like.
 
-## Milestone 5: Practical Optimization
+## Milestone 4: Generic Execution Loop
 
 ### Goal
 
-Optimization should become more stable, less wasteful, and easier to explain before adding heavyweight search algorithms.
+Keep the runner generic and independent from any domain.
 
 ### Scope
 
-- Add strategy recommendation:
-  - Use search space size, budget, and metric profile to recommend a strategy.
-  - Suggest parameter priority when the scenario is known.
-- Add candidate deduplication:
-  - Skip combinations already tried in prior runs.
-  - Skip candidates equivalent to the current configuration.
-- Add early stopping:
-  - Stop after repeated non-improvements.
-  - Stop or deprioritize candidate families that violate latency, size, or cost constraints.
-- Add budget-aware planning:
-  - Estimate experiment count.
-  - Estimate total evaluation time when possible.
-  - Prune or rank candidates when the plan exceeds budget.
-- Add memory-aware search:
-  - Use prior run history to avoid repeated failures.
-  - Prefer historically promising parameter ranges.
-- Add explainable planning:
-  - Record why each candidate was generated.
-  - Report the search strategy, pruning decisions, and stop reason.
-
-### Suggested Deliverables
-
-- `docs/search-strategies.md`
-- Planner support for strategy recommendation.
-- Planner support for candidate deduplication.
-- Planner support for budget-aware pruning.
-- Runner support for early stopping.
-- Report section: Search Plan and Stop Reason.
+- Run baseline evaluation.
+- Generate candidates from declared variables.
+- Mutate only declared editable targets.
+- Execute the declared evaluation method or generated adapter.
+- Parse metrics according to the declaration.
+- Compare using the declared objective and constraints.
+- Accept, reject, roll back, and report.
 
 ### Acceptance Criteria
 
-- A run can estimate how many experiments it plans to execute.
-- The optimizer avoids obvious duplicate trials.
-- Budget limits affect planning before the run blindly spends the budget.
-- The report explains both what was tried and why the run stopped.
-- The default strategy remains suitable for new users.
+- The runner does not need to know whether the target is FAQ, search, pricing, prompt tuning, config tuning, or another domain.
+- Domain-specific behavior lives in user declarations or generated run adapters.
 
-## Recommended Execution Order
+## Milestone 5: Usability And Trust
 
-1. User Onboarding.
-2. Contract UX.
-3. Eval Integration.
-4. Trustworthy Reports.
-5. Practical Optimization.
+### Goal
 
-This order is intentional: first make the skill understandable, then make contracts easier, then make user evals easy to connect, then make results trustworthy, and only then make optimization more sophisticated.
+Make the generic workflow easy to start and easy to trust.
 
-## First Execution Slice
+### Scope
 
-The first implementation slice should stay small and high-impact:
+- Provide a declaration-first quickstart.
+- Provide a guided declaration builder.
+- Provide `explain` output that clarifies what will be changed, how evaluation runs, and how decisions are made.
+- Improve validation messages with concrete remediation.
+- Improve reports with generated-code summaries, metric comparisons, decision reasons, and risk flags.
 
-- Add `docs/quickstart.md`.
-- Add `docs/command-guide.md`.
-- Add `docs/contract-authoring.md`.
-- Add `docs/eval-protocol.md`.
-- Improve validation report remediation guidance.
-- Add a `smoke-eval` CLI command.
+### Acceptance Criteria
 
-This slice directly improves usability without introducing a large new algorithmic surface area.
+- A user can start from their own task statement.
+- The skill can show exactly what it plans to mutate and execute.
+- The report supports an adoption decision without requiring users to inspect raw logs.
+
+## Non-Goals
+
+- Do not expand public dataset support as a product goal.
+- Do not build a provider catalog as a product goal.
+- Do not hardcode more domain-specific scenario behavior as the primary path.
+- Do not force user projects to match FAQ, embedding, reranking, or benchmark shapes.
+
+## Existing Assets Repositioning
+
+- FAQ example: reference declaration and local regression fixture.
+- Benchmark examples: reference declarations for more complex evaluation shapes.
+- Metric profiles: optional examples of comparison rules.
+- Provider demos: optional examples of adapter behavior.
+- Dataset scripts: optional reference utilities, not the generic skill core.
+
+## Next Implementation Slice
+
+The direction realignment docs are now in place. The next implementation slice should make the declaration-first layer executable:
+
+- implement declaration-to-contract generation
+- add validation for declaration fields before contract conversion
+- introduce `auto_optimize_outputs/generated_adapters/` as the run-specific adapter location
+- generate the first simple metrics parser adapter from a declaration
+- record generated adapter paths and source summaries in reports

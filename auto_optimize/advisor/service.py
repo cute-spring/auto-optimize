@@ -30,6 +30,7 @@ def _build_draft_contract(
     scenario: str,
     benchmark_key: str | None,
     benchmark_manifest: dict[str, Any] | None,
+    contract_style: str,
 ) -> dict[str, Any]:
     payload = build_contract_payload(
         workspace=workspace,
@@ -38,13 +39,16 @@ def _build_draft_contract(
         output_path=workspace / "auto_optimize_outputs" / "optimization.contract.draft.yaml",
         benchmark_key=benchmark_key,
         benchmark_manifest=benchmark_manifest,
+        contract_style=contract_style,
     )
     payload["scenario"]["name"] = payload["scenario"].get("name") or f"Advisor Draft - {workspace.name}"
-    payload["version_control"]["enabled"] = False
-    payload["version_control"]["create_branch"] = False
-    payload["version_control"]["commit_accepted_changes"] = False
+    if "version_control" in payload:
+        payload["version_control"]["enabled"] = False
+        payload["version_control"]["create_branch"] = False
+        payload["version_control"]["commit_accepted_changes"] = False
+    payload.setdefault("advisor_context", {})
+    payload["advisor_context"]["contract_style"] = contract_style
     if benchmark_manifest is not None:
-        payload.setdefault("advisor_context", {})
         payload["advisor_context"]["benchmark_manifest"] = benchmark_manifest
     return payload
 
@@ -56,6 +60,7 @@ def _build_readiness_report(
     draft_contract_path: Path,
     benchmark_key: str | None,
     benchmark_manifest: dict[str, Any] | None,
+    contract_style: str,
 ) -> dict[str, Any]:
     required_files = SCENARIO_REQUIRED_FILES[scenario]
     existing_files = [path for path in required_files if (workspace / path).exists()]
@@ -73,12 +78,16 @@ def _build_readiness_report(
         next_actions.extend([f"Create or restore missing required file: {path}" for path in missing_files])
     else:
         next_actions.append(f"Validate the generated draft contract: python -m auto_optimize.cli validate {draft_contract_path}")
+        next_actions.append(
+            f"Explain the generated draft contract: python -m auto_optimize.cli explain-contract {draft_contract_path}"
+        )
         next_actions.append(f"Run the draft contract after validation: python -m auto_optimize.cli run {draft_contract_path}")
 
     return {
         "status": "ready" if ready_for_run else "needs_attention",
         "scenario_type": scenario,
         "recommended_metric_profile": metric_profile,
+        "recommended_contract_style": contract_style,
         "metric_template_path": f"examples/metric_templates/{metric_profile}.yaml",
         "workspace_path": str(workspace),
         "draft_contract_path": str(draft_contract_path),
@@ -96,10 +105,16 @@ def _build_readiness_report(
     }
 
 
-def run_advisor(workspace_arg: str | Path, scenario: str | None = None) -> AdvisorResult:
+def run_advisor(
+    workspace_arg: str | Path,
+    scenario: str | None = None,
+    contract_style: str = "minimal",
+) -> AdvisorResult:
     workspace = Path(workspace_arg).resolve()
     if not workspace.exists() or not workspace.is_dir():
         raise ValueError(f"Workspace does not exist or is not a directory: {workspace}")
+    if contract_style not in {"minimal", "expanded"}:
+        raise ValueError(f"Unsupported contract style: {contract_style}")
 
     benchmark_manifest = load_benchmark_manifest(workspace)
     benchmark_key = None if benchmark_manifest is None else benchmark_manifest.get("dataset_key")
@@ -111,7 +126,13 @@ def run_advisor(workspace_arg: str | Path, scenario: str | None = None) -> Advis
     draft_contract_path = output_dir / "optimization.contract.draft.yaml"
     readiness_report_path = output_dir / "readiness_report.json"
 
-    draft_contract = _build_draft_contract(workspace, resolved_scenario, benchmark_key, benchmark_manifest)
+    draft_contract = _build_draft_contract(
+        workspace,
+        resolved_scenario,
+        benchmark_key,
+        benchmark_manifest,
+        contract_style,
+    )
     write_yaml_file(draft_contract_path, draft_contract)
 
     readiness_report = _build_readiness_report(
@@ -121,6 +142,7 @@ def run_advisor(workspace_arg: str | Path, scenario: str | None = None) -> Advis
         draft_contract_path=draft_contract_path,
         benchmark_key=benchmark_key,
         benchmark_manifest=benchmark_manifest,
+        contract_style=contract_style,
     )
     readiness_report_path.write_text(
         json.dumps(readiness_report, indent=2, ensure_ascii=False) + "\n",

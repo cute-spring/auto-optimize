@@ -18,6 +18,7 @@ class BuildResult:
     scenario: str
     metric_profile: str
     benchmark_key: str | None
+    contract_style: str
     contract_payload: dict[str, Any]
 
 
@@ -171,6 +172,28 @@ def _workspace_reference(workspace: Path, output_path: Path) -> str:
     return to_posix_relative(relative)
 
 
+def _minimalize_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    minimal_payload: dict[str, Any] = {
+        "schema_version": payload["schema_version"],
+        "scenario": payload["scenario"],
+        "workspace": payload["workspace"],
+        "editable_scope": payload["editable_scope"],
+        "search_space": payload["search_space"],
+        "evaluation": {
+            "command": payload["evaluation"]["command"],
+        },
+        "metrics": {
+            "primary": payload["metrics"]["primary"],
+        },
+    }
+
+    builder_context = payload.get("builder_context")
+    if builder_context:
+        minimal_payload["builder_context"] = builder_context
+
+    return minimal_payload
+
+
 def build_contract_payload(
     workspace: Path,
     scenario: str,
@@ -178,6 +201,7 @@ def build_contract_payload(
     output_path: Path,
     benchmark_key: str | None = None,
     benchmark_manifest: dict[str, Any] | None = None,
+    contract_style: str = "expanded",
 ) -> dict[str, Any]:
     payload = load_template_payload(scenario, benchmark_key)
     metric_sections = load_metric_profile(metric_profile)
@@ -195,10 +219,13 @@ def build_contract_payload(
 
     payload.setdefault("builder_context", {})
     payload["builder_context"]["metric_profile"] = metric_profile
+    payload["builder_context"]["contract_style"] = contract_style
     if benchmark_key is not None:
         payload["builder_context"]["benchmark_key"] = benchmark_key
     if benchmark_manifest is not None:
         payload["builder_context"]["benchmark_manifest"] = benchmark_manifest
+    if contract_style == "minimal":
+        return _minimalize_payload(payload)
     return payload
 
 
@@ -208,10 +235,13 @@ def build_contract(
     metric_profile: str | None = None,
     output_path: str | Path | None = None,
     benchmark_key: str | None = None,
+    contract_style: str = "expanded",
 ) -> BuildResult:
     workspace = Path(workspace_arg).resolve()
     if not workspace.exists() or not workspace.is_dir():
         raise ValueError(f"Workspace does not exist or is not a directory: {workspace}")
+    if contract_style not in {"minimal", "expanded"}:
+        raise ValueError(f"Unsupported contract style: {contract_style}")
 
     benchmark_manifest = load_benchmark_manifest(workspace)
     resolved_benchmark_key = benchmark_key or (None if benchmark_manifest is None else benchmark_manifest.get("dataset_key"))
@@ -230,6 +260,7 @@ def build_contract(
         output_path=contract_path,
         benchmark_key=resolved_benchmark_key,
         benchmark_manifest=benchmark_manifest,
+        contract_style=contract_style,
     )
     write_yaml_file(contract_path, contract_payload)
 
@@ -238,5 +269,6 @@ def build_contract(
         scenario=resolved_scenario,
         metric_profile=resolved_metric_profile,
         benchmark_key=resolved_benchmark_key,
+        contract_style=contract_style,
         contract_payload=contract_payload,
     )

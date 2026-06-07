@@ -80,6 +80,39 @@ def test_build_command_generates_valid_contract_from_template(tmp_path: Path) ->
     assert result.valid
 
 
+def test_build_command_supports_minimal_style(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    shutil.copytree(SOURCE_WORKSPACE, workspace)
+    _reset_workspace_fixture(workspace)
+
+    output_path = workspace / "contracts" / "generated-minimal.contract.yaml"
+    exit_code = main(
+        [
+            "build",
+            "--workspace",
+            str(workspace),
+            "--scenario",
+            "faq_retrieval",
+            "--metric-profile",
+            "faq_metrics",
+            "--style",
+            "minimal",
+            "--output",
+            str(output_path),
+        ]
+    )
+
+    assert exit_code == 0
+    payload = yaml.safe_load(output_path.read_text(encoding="utf-8"))
+    assert "constraints" not in payload
+    assert "run_policy" not in payload
+    assert payload["builder_context"]["contract_style"] == "minimal"
+
+    contract = load_contract(output_path)
+    result = validate_contract(contract)
+    assert result.valid
+
+
 def test_guided_command_generates_contract_and_readiness_for_workspace(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     shutil.copytree(SOURCE_WORKSPACE, workspace)
@@ -100,6 +133,41 @@ def test_guided_command_generates_contract_and_readiness_for_workspace(tmp_path:
     contract = load_contract(generated_contract_path)
     result = validate_contract(contract)
     assert result.valid
+
+
+def test_guided_command_defaults_to_minimal_style(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    shutil.copytree(SOURCE_WORKSPACE, workspace)
+    _reset_workspace_fixture(workspace)
+
+    exit_code = main(["guided", "--workspace", str(workspace)])
+
+    assert exit_code == 0
+
+    generated_contract_path = workspace / "auto_optimize_outputs" / "optimization.contract.generated.yaml"
+    payload = yaml.safe_load(generated_contract_path.read_text(encoding="utf-8"))
+    readiness = json.loads((workspace / "auto_optimize_outputs" / "readiness_report.json").read_text(encoding="utf-8"))
+
+    assert "constraints" not in payload
+    assert payload["builder_context"]["contract_style"] == "minimal"
+    assert readiness["recommended_contract_style"] == "minimal"
+
+
+def test_advisor_expanded_style_is_recorded_in_readiness_report(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    shutil.copytree(SOURCE_WORKSPACE, workspace)
+    _reset_workspace_fixture(workspace)
+
+    exit_code = main(["advisor", "--workspace", str(workspace), "--style", "expanded"])
+
+    assert exit_code == 0
+
+    readiness = json.loads((workspace / "auto_optimize_outputs" / "readiness_report.json").read_text(encoding="utf-8"))
+    draft = yaml.safe_load((workspace / "auto_optimize_outputs" / "optimization.contract.draft.yaml").read_text(encoding="utf-8"))
+
+    assert readiness["recommended_contract_style"] == "expanded"
+    assert draft["builder_context"]["contract_style"] == "expanded"
+    assert "constraints" in draft
 
 
 def test_template_command_lists_available_scenarios_profiles_and_benchmarks(capsys) -> None:

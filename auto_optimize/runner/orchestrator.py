@@ -25,7 +25,7 @@ from auto_optimize.runner.decision import (
     is_non_dominated,
     tracked_metric_definitions,
 )
-from auto_optimize.runner.evaluator import EvaluationExecutionError, execute_evaluation
+from auto_optimize.runner.evaluator import EvaluationExecutionError, execute_evaluation_with_details
 from auto_optimize.runner.modifier import apply_candidate_changes
 from auto_optimize.runner.planner import Candidate, generate_candidates
 from auto_optimize.runner.rollback import rollback_change
@@ -346,7 +346,8 @@ def run_contract(contract: OptimizationContract) -> dict[str, Any]:
         rollback_performed = False
 
         try:
-            candidate_metrics = execute_evaluation(contract)
+            outcome = execute_evaluation_with_details(contract)
+            candidate_metrics = outcome.metrics
         except EvaluationExecutionError as exc:
             rollback_change(contract, snapshots)
             rollback_performed = True
@@ -533,6 +534,7 @@ def run_contract(contract: OptimizationContract) -> dict[str, Any]:
         "accepted_candidates": accepted_candidates,
         "constraints_satisfied": all(check.passed for check in constraint_checks),
         "constraint_checks": [asdict(check) for check in constraint_checks],
+        "generated_adapters": validation_result.generated_adapters,
         "pareto_enabled": contract.pareto.enabled,
         "pareto_profiles": contract.pareto.profiles,
         "pareto_frontier": pareto_frontier,

@@ -1,0 +1,33 @@
+schema_version: "0.2"
+
+scenario:
+  type: faq_retrieval
+  name: "Minimal FAQ Contract Example"
+
+workspace:
+  path: "../faq_retrieval/workspace"
+
+editable_scope:
+  - "configs/retrieval.yaml"
+
+search_space:
+  top_k:
+    values: [5, 10, 20]
+    mapping:
+      type: yaml_path
+      file: "configs/retrieval.yaml"
+      path: "retrieval.top_k"
+  threshold:
+    values: [0.78, 0.82, 0.86]
+    mapping:
+      type: yaml_path
+      file: "configs/retrieval.yaml"
+      path: "retrieval.threshold"
+
+evaluation:
+  command: "python eval/run_eval.py --json"
+
+metrics:
+  primary:
+    name: "top1_accuracy"
+    direction: maximize

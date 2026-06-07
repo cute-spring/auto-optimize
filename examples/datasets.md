@@ -1,6 +1,10 @@
 # Public Benchmark Datasets
 
-This document summarizes public datasets that fit the AutoOptimize skill's near-term benchmark goals:
+This is a reference document only.
+
+Public datasets are not the product direction of AutoOptimize. They can help test example declarations and regression fixtures, but the skill should primarily operate from user-declared objectives, variables, evaluation methods, metrics, and safety boundaries.
+
+This document records public datasets that were considered as optional reference fixtures for retrieval-like examples:
 
 - embedding accuracy
 - retrieval accuracy
@@ -14,7 +18,7 @@ Important:
 - Latency, throughput, model size, and index size are measured locally on top of those datasets.
 - Large datasets should usually be sampled into smaller local benchmark subsets before becoming default fixtures.
 
-## Recommended Defaults
+## Optional Reference Fixtures
 
 ### 1. BEIR SciFact
 
@@ -22,13 +26,13 @@ Important:
 - Why it fits:
   - small enough for local smoke tests
   - standard `corpus / queries / qrels` retrieval shape
-  - easy to use as a stable default benchmark
+  - easy to use as a stable reference fixture
 - Good metrics:
   - `nDCG@10`
   - `Recall@10`
   - `MRR`
 - Suggested use:
-  - first English retrieval benchmark
+  - first English retrieval reference fixture
   - embedding quality regression after model or template changes
 
 Source:
@@ -47,7 +51,7 @@ Source:
   - `latency_ms`
   - `index_size_mb`
 - Suggested use:
-  - default Chinese embedding retrieval benchmark
+  - Chinese embedding retrieval reference fixture
 
 Source:
 - [mteb/DuRetrieval](https://huggingface.co/datasets/mteb/DuRetrieval)

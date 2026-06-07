@@ -90,6 +90,18 @@ def generate_markdown_report(summary: dict[str, Any], baseline_metrics: dict[str
                 f"`{candidate['primary_metric_after']}` (delta `{_format_delta(candidate['primary_metric_improvement'])}`)."
             )
 
+    generated_adapters = summary.get("generated_adapters", [])
+    lines.extend(["", "## Generated Adapters", ""])
+    if not generated_adapters:
+        lines.append("- No generated adapters were used in this run.")
+    else:
+        for adapter in generated_adapters:
+            lines.append(
+                "- "
+                f"`{adapter['kind']}` via `{adapter['template']}` generated `{adapter['generated_path']}` "
+                f"for `{adapter['purpose']}` with risk flags `{adapter['risk_flags']}`."
+            )
+
     benchmark_context = summary.get("benchmark_context")
     if benchmark_context:
         lines.extend(["", "## Benchmark Context", ""])

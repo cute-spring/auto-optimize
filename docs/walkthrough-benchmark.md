@@ -1,19 +1,18 @@
-# Walkthrough: Benchmark Workspace
+# Walkthrough: Benchmark Reference Assets
 
-Use this walkthrough when you want to run AutoOptimize against a retrieval or reranking benchmark workspace.
+Benchmark assets are reference examples only.
 
-## What You Need
+They are useful for testing the current runner and showing a more complex evaluation declaration, but they are not the product direction. AutoOptimize should not require user projects to be benchmark-shaped.
 
-- the repository checked out locally
-- Python environment with the project dependencies installed
-- one of the supported benchmark keys:
-  - `beir_scifact`
-  - `du_retrieval`
-  - `cmedqa_reranking`
+## What This Reference Demonstrates
 
-## Fastest Path
+- protected data and eval files
+- generated workspaces
+- metric extraction from an evaluation command
+- reference provider-style adapters
+- run artifacts and reports
 
-Materialize a runnable benchmark workspace from the built-in assets:
+## Current Reference Flow
 
 ```bash
 python scripts/materialize_benchmark_workspace.py \
@@ -27,69 +26,14 @@ python -m auto_optimize.cli run \
   materialized_benchmarks/beir_scifact/optimization.contract.yaml
 ```
 
-## What This Produces
+## Direction Boundary
 
-The materializer creates:
+Do not treat this as the required path for users.
 
-- a generated `optimization.contract.yaml`
-- `workspace/configs/*`
-- `workspace/data/benchmark_manifest.json`
-- `workspace/eval/run_benchmark_eval.py`
-- sample or copied benchmark data under `workspace/data/`
+The generic path should be:
 
-## Optional Local Dataset Path
+1. user declares their own data, evaluation command, metrics, and constraints
+2. AutoOptimize generates or selects temporary adapters if needed
+3. runner executes the generic loop
 
-If you already have local data in a supported normalized layout, materialize from that directory:
-
-```bash
-python scripts/materialize_benchmark_workspace.py \
-  --dataset du_retrieval \
-  --output-dir materialized_benchmarks \
-  --dataset-dir /path/to/local/dataset
-```
-
-If your data is a Hugging Face `save_to_disk()` directory, export it first:
-
-```bash
-python scripts/export_benchmark_dataset.py \
-  --dataset du_retrieval \
-  --dataset-dir /path/to/hf_saved_dataset
-```
-
-## What To Inspect
-
-After materialization:
-
-- `workspace/data/benchmark_manifest.json`
-- `workspace/eval/run_benchmark_eval.py`
-- the generated benchmark contract
-
-After validation and run:
-
-- `workspace/auto_optimize_outputs/contract_validation_report.md`
-- `workspace/auto_optimize_outputs/run_summary.json`
-- `workspace/auto_optimize_outputs/optimization_report.md`
-
-## Provider Modes
-
-Benchmark workspaces support provider configuration in `workspace/configs/provider.yaml`.
-
-- `sample`
-  - default
-  - local sample harness
-- `sentence_transformers`
-  - local embedding model execution
-- `cross_encoder`
-  - local reranking model execution for reranking benchmarks
-
-The default onboarding path uses `sample`, because it is the easiest way to validate the workflow end to end.
-
-## How To Know You Succeeded
-
-You are done when:
-
-- the workspace materializes successfully
-- `validate` passes on the generated contract
-- `run` finishes and produces report artifacts under `workspace/auto_optimize_outputs/`
-
-For more background on benchmark assets, see [examples/benchmarks/README.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/examples/benchmarks/README.md:1).
+The benchmark utilities may remain as fixtures and examples for complex declarations.

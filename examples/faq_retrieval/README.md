@@ -1,4 +1,6 @@
-# FAQ Retrieval Example
+# FAQ Retrieval Reference Example
+
+This is a reference declaration and local regression fixture. It is not the required shape for user projects.
 
 This example now does two jobs:
 

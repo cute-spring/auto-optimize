@@ -1,222 +1,120 @@
 # AutoOptimize Architecture Overview
 
-This page explains how the main parts of AutoOptimize fit together so a new collaborator can quickly answer:
+AutoOptimize is organized around a generic declaration-driven workflow.
 
-- what the skill is responsible for
-- what a contract controls
-- where example benchmarks fit
-- how the runner makes decisions
-- what reports and Git records are produced
+The central question is not "which built-in scenario is this?" The central question is:
+
+> Has the user declared what can change, how to evaluate it, how to compare results, and what must stay protected?
 
 ## System View
 
 ```mermaid
 flowchart LR
-    user["User / Operator"] --> skill["AutoOptimize Skill<br/>SKILL.md + CLI"]
-
-    skill --> contract["Optimization Contract<br/>optimization.contract.yaml"]
-    skill --> examples["Examples / Benchmarks<br/>FAQ fixture, benchmark templates, datasets"]
-
-    contract --> validator["Validator + Safety Guards<br/>scope, eval integrity, budget, Git"]
-    examples --> validator
-
-    validator -->|valid| runner["Runner / Orchestrator<br/>baseline -> candidates -> evaluate -> decide"]
-    validator -->|invalid| validation_report["Validation Report<br/>contract_validation_report.md"]
-
-    contract --> runner
-    examples --> runner
-
-    runner --> modifier["Config Modifier<br/>YAML / JSON path edits"]
-    runner --> evaluator["Evaluation Command<br/>workspace eval script / benchmark harness"]
-    runner --> decision["Decision Policy<br/>primary metric + constraints"]
-    runner --> rollback["Rollback<br/>restore rejected candidate changes"]
-    runner --> git["Git Layer<br/>repo checks, branch, accepted commits"]
-
-    evaluator --> metrics["Metrics Output<br/>accuracy, latency, size, pass/fail"]
-    metrics --> decision
-
-    decision -->|accepted| git
-    decision -->|rejected| rollback
-
-    runner --> reports["Reports + Logs<br/>experiment_log.jsonl/csv<br/>run_summary.json<br/>optimization_report.md"]
+    user["User / Operator"] --> declaration["Declaration<br/>goal, variables, eval, metrics, constraints, safety"]
+    declaration --> validator["Validator<br/>scope, eval readiness, budget, Git, risk"]
+    declaration --> generator["Dynamic Adapter Generator<br/>optional run-specific code"]
+    generator --> adapters["Generated Adapters<br/>parser, wrapper, mutator, comparator"]
+    validator --> contract["Executable Contract<br/>normalized internal form"]
+    adapters --> contract
+    contract --> runner["Generic Runner<br/>baseline -> candidates -> evaluate -> decide"]
+    runner --> evaluator["Evaluation Method<br/>declared command or generated wrapper"]
+    runner --> modifier["Mutation Method<br/>declared variables only"]
+    evaluator --> metrics["Metrics<br/>declared source"]
+    metrics --> decision["Comparison Rule<br/>primary metric + constraints"]
+    decision --> runner
+    runner --> rollback["Rollback<br/>rejected changes"]
+    runner --> report["Reports + Logs<br/>decision audit"]
+    runner --> git["Optional Git Layer<br/>only when declared"]
 ```
 
-## Core Relationship
+## Core Pieces
 
-### 1. Skill
+### Declaration
 
-The skill is the top-level workflow surface.
+The declaration is the user-facing description of the optimization job.
 
-- It defines the expected operator workflow in [SKILL.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/SKILL.md:1).
-- It exposes CLI entrypoints such as `validate` and `run` in [auto_optimize/cli.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/cli.py:1).
-- It does not hardcode one specific retrieval or reranking system. Instead, it provides a reusable optimization engine.
+It should capture:
 
-In short:
+- objective
+- editable variables
+- protected scope
+- evaluation command
+- metric extraction
+- comparison rule
+- constraints
+- budget
+- optional user-provided algorithm
+- optional permission for generated adapters
 
-- `skill = orchestration contract for humans and agents`
+The current `optimization.contract.yaml` can remain the executable internal form, but it should not be the only way users can express intent.
 
-### 2. Contract
+### Dynamic Adapters
 
-The contract is the job description for one optimization task.
+AutoOptimize may generate temporary helper code when the declaration is clear but the user has not supplied an adapter.
 
-It defines:
+Examples:
 
-- which workspace to operate on
-- which files are editable
-- which files are protected
-- which parameters may be changed
-- how evaluation is run
-- which metric is primary
-- what constraints must never be violated
-- whether Git controls are required
+- parse metrics from stdout
+- wrap an evaluation command
+- mutate YAML, JSON, env vars, or CLI args
+- normalize output into a metrics object
+- compare results with user-declared rules
 
-Relevant implementation:
+Generated adapters should live under `auto_optimize_outputs/generated_adapters/`, be recorded in reports, and stay inside the declared safety boundaries.
 
-- [auto_optimize/shared/schemas.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/shared/schemas.py:1)
-- [auto_optimize/contract/loader.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/contract/loader.py:1)
-- [auto_optimize/contract/validator.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/contract/validator.py:1)
+### Validator
 
-In short:
+The validator protects the user before experiments run.
 
-- `contract = machine-readable optimization plan`
+It checks:
 
-### 3. Example Benchmarks
+- workspace exists
+- editable and protected scopes do not conflict
+- evaluation path is protected
+- variables point at allowed mutation targets
+- required metrics can be found
+- budgets and Git settings are safe
+- generated adapter permissions are clear
 
-Examples and benchmark templates provide runnable scenarios for the skill.
+### Generic Runner
 
-They answer:
+The runner should not care whether the target project is FAQ retrieval, embedding search, prompt tuning, model selection, config tuning, or anything else.
 
-- what kind of system are we optimizing
-- what does the evaluation script emit
-- which metric profile makes sense for this scenario
+It only needs:
 
-Current examples include:
+- candidate variables
+- mutation method
+- evaluation method
+- metrics
+- comparison rule
+- rollback scope
 
-- FAQ retrieval example: [examples/faq_retrieval/optimization.contract.yaml](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/examples/faq_retrieval/optimization.contract.yaml:1)
-- Benchmark templates: [examples/benchmarks/README.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/examples/benchmarks/README.md:1)
-- Metric templates: [examples/metric_templates/README.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/examples/metric_templates/README.md:1)
+### Reports
 
-In short:
+Reports should answer:
 
-- `examples/benchmarks = testbeds that the skill can optimize`
+- what was declared
+- what code or adapters were generated
+- what changed
+- what metrics moved
+- why candidates were accepted or rejected
+- whether the final result should be adopted or reviewed
 
-### 4. Runner
+## Existing Examples
 
-The runner turns a validated contract into actual experiments.
+Existing examples are reference assets, not the product center.
 
-Current MVP flow:
+- FAQ example: small local reference declaration and regression fixture.
+- Benchmark examples: reference declarations for more complex evaluation data.
+- Metric templates: optional comparison-rule examples.
+- Dataset scripts: optional helper utilities.
 
-1. Run baseline evaluation.
-2. Generate candidates from `search_space` using the configured `search_strategy`.
-3. Modify one or more target YAML/JSON config fields.
-4. Execute the evaluation command.
-5. Compare metrics against the current best result.
-6. Accept or reject the candidate.
-7. Roll back rejected changes.
-8. Write experiment artifacts.
-
-Relevant modules:
-
-- [auto_optimize/runner/orchestrator.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/runner/orchestrator.py:1)
-- [auto_optimize/runner/planner.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/runner/planner.py:1)
-- [auto_optimize/runner/modifier.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/runner/modifier.py:1)
-- [auto_optimize/runner/evaluator.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/runner/evaluator.py:1)
-- [auto_optimize/runner/decision.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/runner/decision.py:1)
-- [auto_optimize/runner/rollback.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/runner/rollback.py:1)
-
-In short:
-
-- `runner = experiment execution engine`
-
-### 5. Report
-
-Reports make the run understandable after the fact.
-
-Current outputs include:
-
-- validation report
-- experiment JSONL log
-- experiment CSV log
-- run summary JSON
-- Markdown optimization report
-
-Relevant module:
-
-- [auto_optimize/reporting/report_generator.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/reporting/report_generator.py:1)
-
-In short:
-
-- `report = audit trail for what happened and why`
-
-### 6. Git
-
-Git is the safety and traceability layer around accepted changes.
-
-When enabled by the contract, AutoOptimize can:
-
-- verify the workspace is a Git repo
-- require a clean worktree
-- create a local optimization branch
-- commit accepted changes
-- record branch and commit metadata in the run summary
-
-Relevant module:
-
-- [auto_optimize/shared/git.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/shared/git.py:1)
-
-In short:
-
-- `git = versioned checkpoint and audit layer`
-
-## How A Real Run Connects These Pieces
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant S as Skill / CLI
-    participant C as Contract
-    participant V as Validator
-    participant R as Runner
-    participant E as Eval Script
-    participant G as Git
-    participant O as Output Artifacts
-
-    U->>S: run optimization.contract.yaml
-    S->>C: load contract
-    S->>V: validate contract
-    V->>O: write validation report
-    V-->>S: baseline metrics + safety result
-    S->>R: start run
-    R->>E: run baseline / candidate eval
-    E-->>R: metrics JSON
-    R->>R: compare against current best
-    alt candidate accepted
-        R->>G: optionally branch / commit
-    else candidate rejected
-        R->>R: restore snapshot rollback
-    end
-    R->>O: write JSONL / CSV / summary / Markdown report
-    O-->>U: inspect results and best config
-```
-
-## Mental Model
-
-If you want the shortest possible description, use this:
-
-- `skill` tells people and agents how to use AutoOptimize
-- `contract` tells AutoOptimize what it is allowed to optimize
-- `example benchmark` gives AutoOptimize a realistic scenario to operate on
-- `runner` performs the actual experiments
-- `report` explains what happened
-- `git` makes accepted changes traceable and reviewable
+AutoOptimize should remain useful when none of these examples match the user's project.
 
 ## Recommended Reading Order
 
-For someone new to the repo, this is the fastest path:
-
-1. [SKILL.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/SKILL.md:1)
-2. [README.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/README.md:1)
-3. [examples/faq_retrieval/optimization.contract.yaml](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/examples/faq_retrieval/optimization.contract.yaml:1)
-4. [auto_optimize/contract/validator.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/contract/validator.py:1)
+1. [Generic Skill Direction](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/generic-skill-direction.md:1)
+2. [Declaration Protocol](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/declaration-protocol.md:1)
+3. [SKILL.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/SKILL.md:1)
+4. [README.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/README.md:1)
 5. [auto_optimize/runner/orchestrator.py](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/runner/orchestrator.py:1)
-6. [docs/benchmark-metrics.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/benchmark-metrics.md:1)

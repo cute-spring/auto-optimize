@@ -1,6 +1,8 @@
 # Walkthrough: FAQ Example
 
-Use this walkthrough when you want the easiest possible first success.
+Use this walkthrough when you want to see the current runner operate end to end on a small local reference fixture.
+
+This is not the required shape for user projects. FAQ is only a reference declaration and regression fixture.
 
 ## What You Need
 
@@ -19,7 +21,7 @@ python -m auto_optimize.cli report examples/faq_retrieval/workspace/auto_optimiz
 
 ## What This Example Is
 
-The FAQ example is a deterministic local fixture. It is designed to validate the AutoOptimize workflow itself:
+The FAQ example is a deterministic local fixture. It is designed to validate the generic AutoOptimize workflow itself:
 
 - contract loading
 - readiness inspection
@@ -64,7 +66,7 @@ This walkthrough gives you the shortest full path through the product:
 - what validation protects
 - what run artifacts look like
 
-After this, the next natural step is either:
+After this, return to the generic declaration model:
 
-- a benchmark workspace via [walkthrough-benchmark.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/walkthrough-benchmark.md:1)
-- your own eval integration via [walkthrough-custom-eval.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/walkthrough-custom-eval.md:1)
+- [declaration-protocol.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/declaration-protocol.md:1)
+- [walkthrough-custom-eval.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/walkthrough-custom-eval.md:1)

@@ -1,6 +1,8 @@
-# Benchmark Contract Templates
+# Benchmark Reference Assets
 
-These templates are intentionally not tied to checked-in corpora. They are starting points for materializing a real benchmark workspace after you download or sample a public dataset.
+These assets are references and regression fixtures. They are not the core AutoOptimize direction.
+
+The core direction is generic declaration-driven optimization. Benchmark utilities remain useful as examples of complex declarations involving data files, candidate sets, metrics, and adapters.
 
 Included templates:
 

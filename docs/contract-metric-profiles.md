@@ -1,6 +1,8 @@
 # Contract Metric Profiles
 
-This document defines three recommended reusable metric profiles for AutoOptimize contracts.
+This document defines optional reference metric profiles for AutoOptimize contracts.
+
+These profiles are examples of comparison-rule bundles. They should not force user projects into FAQ, embedding, or reranking categories.
 
 Related YAML snippets live in:
 

@@ -1,11 +1,20 @@
 # Docs
 
-- `quickstart.md`: shortest useful path through `advisor -> validate -> run -> report`.
-- `command-guide.md`: when to use each CLI command and what artifacts it produces.
-- `walkthrough-faq.md`: easiest first-run walkthrough using the checked-in FAQ example.
-- `walkthrough-benchmark.md`: benchmark workspace walkthrough using the materializer and generated contracts.
-- `walkthrough-custom-eval.md`: recommended MVP path for adapting your own evaluation script.
-- `architecture-overview.md`: high-level map of how the skill, contract, examples, runner, reports, and Git layer work together.
-- `benchmark-metrics.md`: recommended metrics for embedding, retrieval, reranking, latency, size, and robustness evaluation in AutoOptimize.
-- `contract-metric-profiles.md`: three reusable contract metric profiles for FAQ, embedding, and reranking evaluation.
-- `skill-improvement-roadmap.md`: product-oriented roadmap for making the skill easier to start, configure, connect to evals, trust, and optimize with.
+Read these first:
+
+- `generic-skill-direction.md`: the current product direction, centered on a generic declaration-driven skill.
+- `declaration-protocol.md`: the intended user-facing declaration shape.
+- `quickstart.md`: declaration-first starting path.
+- `command-guide.md`: current CLI commands and their transitional role.
+- `architecture-overview.md`: how declarations, generated adapters, validation, runner, reports, and Git fit together.
+- `skill-improvement-roadmap.md`: roadmap aligned to the generic skill direction.
+
+Reference docs:
+
+- `contract-authoring.md`: current executable contract authoring guidance.
+- `contract-fields.md`: field guide for the existing contract format.
+- `walkthrough-custom-eval.md`: generic custom eval declaration walkthrough.
+- `walkthrough-faq.md`: reference fixture walkthrough.
+- `walkthrough-benchmark.md`: benchmark reference asset walkthrough.
+- `benchmark-metrics.md`: optional metric reference for retrieval/reranking-like examples.
+- `contract-metric-profiles.md`: optional comparison-rule examples.

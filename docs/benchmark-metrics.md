@@ -1,6 +1,10 @@
 # Benchmark Metrics
 
-This document defines the most useful benchmark metrics for the AutoOptimize skill when evaluating:
+This document is an optional metric reference for retrieval-like examples.
+
+It should not be read as the core direction of AutoOptimize. The core direction is generic declaration-driven optimization.
+
+This document defines useful metrics when evaluating:
 
 - embedding quality
 - retrieval quality

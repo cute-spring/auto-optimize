@@ -1,6 +1,8 @@
-# Contract Metric Templates
+# Metric Template References
 
-These files are reusable YAML snippets for the metric-related parts of an AutoOptimize contract.
+These files are optional examples of comparison rules for the metric-related parts of an AutoOptimize contract.
+
+They should not force user projects into FAQ, embedding, or reranking categories. A generic declaration can define its own primary metric, secondary metrics, constraints, and comparison rules.
 
 They are designed to be copied into the following contract sections:
 

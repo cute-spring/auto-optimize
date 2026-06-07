@@ -1,118 +1,79 @@
 # AutoOptimize
 
-AutoOptimize is a contract-driven optimization skill suite MVP. The current implementation includes safe contract loading and validation, a bounded search optimization loop with one-variable and pairwise strategies, Markdown/JSONL reporting, and optional local Git branching plus accepted-change commits.
+AutoOptimize is a generic, declaration-driven optimization skill.
+
+It is designed for user projects where the user can declare the goal, editable variables, protected boundaries, evaluation method, metrics, and comparison rule. AutoOptimize should then validate the declaration, generate temporary helper code when useful, run bounded experiments, compare results, roll back rejected changes, and produce an auditable report.
+
+It is not intended to become a large static catalog of hardcoded scenarios, datasets, providers, or benchmark adapters. Existing FAQ, embedding, reranking, and benchmark assets are reference examples and regression fixtures.
 
 ## Start Here
 
-If you are new to the project, use this order:
+Read these first:
 
-1. [Quickstart](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/quickstart.md:1)
-2. [Command Guide](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/command-guide.md:1)
-3. [FAQ Walkthrough](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/walkthrough-faq.md:1)
-4. [Examples Index](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/examples/README.md:1)
+1. [Generic Skill Direction](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/generic-skill-direction.md:1)
+2. [Declaration Protocol](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/declaration-protocol.md:1)
+3. [Quickstart](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/quickstart.md:1)
+4. [Command Guide](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/command-guide.md:1)
+5. [Architecture Overview](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/architecture-overview.md:1)
 
-## Available Commands
+## Core Workflow
+
+1. Declare the optimization objective.
+2. Declare editable variables and protected scope.
+3. Declare how evaluation runs and where metrics come from.
+4. Declare how to compare improvement and regressions.
+5. Validate the declaration or generated contract.
+6. Run bounded experiments.
+7. Inspect the report and decide whether to adopt the result.
+
+## Current Commands
 
 ```bash
-python -m auto_optimize.cli validate examples/faq_retrieval/optimization.contract.yaml
+python -m auto_optimize.cli declare examples/declarations/generic_config_optimization.declaration.yaml --output /tmp/auto-optimize-declared.contract.yaml
 python -m auto_optimize.cli advisor --help
-python -m auto_optimize.cli build --help
 python -m auto_optimize.cli guided --help
-python -m auto_optimize.cli template --json
-python -m auto_optimize.cli run --help
-python -m auto_optimize.cli report --help
-python scripts/download_benchmark_dataset.py --list
-python scripts/materialize_benchmark_workspace.py --help
-python scripts/export_benchmark_dataset.py --help
+python -m auto_optimize.cli build --help
+python -m auto_optimize.cli explain-contract /tmp/auto-optimize-declared.contract.yaml
+python -m auto_optimize.cli validate /tmp/auto-optimize-declared.contract.yaml
+python -m auto_optimize.cli run /tmp/auto-optimize-declared.contract.yaml
+python -m auto_optimize.cli report examples/faq_retrieval/workspace/auto_optimize_outputs
 ```
 
-## Current Scope
+The current CLI still uses `optimization.contract.yaml` as the executable form, but declarations can now generate that executable contract directly. Dynamic adapter generation is still future work.
 
-- `advisor`: implemented for draft contract and readiness report generation
-- `build`: implemented for composing a generated contract from scenario templates and metric profiles
-- `guided`: implemented as advisor plus generated-contract workflow for beginners
-- `template`: implemented for listing available scenarios, metric profiles, and benchmark datasets
-- `validate`: implemented
-- Git-aware contract validation: implemented
-- `run`: implemented as a validation-first MVP loop with bounded one-variable or pairwise candidates and experiment memory
-- `report`: implemented for regenerating reports from run artifacts
-- local branch creation, accepted-change commits, and optional remote push / PR handoff: implemented when enabled in the contract
+## Current Implementation
 
-## Validation Outputs
+Implemented foundations:
 
-The validator writes a Markdown report to the contract workspace output directory, typically:
+- contract loading and validation
+- editable and protected scope checks
+- evaluation execution
+- YAML and JSON path mutation
+- bounded candidate search
+- accept/reject decisions
+- rollback for rejected candidates
+- JSONL/CSV/Markdown reporting
+- experiment memory
+- optional Git checks, branch creation, commits, push, and PR handoff when explicitly enabled
+- contract explanation and minimal/expanded generated contract styles
 
-```text
-<workspace>/auto_optimize_outputs/contract_validation_report.md
-```
+Important limitation:
 
-Current validation covers:
+- `advisor`, `build`, and `guided` still contain scenario-oriented logic today. That should be treated as transitional support, not the product direction.
 
-- workspace and scope checks
-- protected evaluation path checks
-- baseline evaluation JSON parsing
-- run budget checks
-- Git repository presence when enabled
-- clean worktree enforcement
-- validating remote Git prerequisites such as remotes and GitHub CLI when enabled
+## Reference Assets
 
-Current run mode covers:
+These are examples, not the core product direction:
 
-- baseline evaluation plus candidate evaluation
-- configurable `search_strategy` with `one_variable`, `pairwise`, and `one_variable_then_pairwise`
-- YAML/JSON parameter mutation within `editable_scope`
-- accept or reject decisions using the configured primary metric and constraints
-- file-snapshot rollback for rejected candidates
-- experiment logs in JSONL and CSV plus Markdown summary reports
-- run history and best-run memory snapshots
-- optional local Git branch creation and commit of accepted changes
+- [examples/faq_retrieval/](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/examples/faq_retrieval/README.md:1): local reference declaration and regression fixture.
+- [examples/benchmarks/](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/examples/benchmarks/README.md:1): reference benchmark-shaped declarations.
+- [examples/metric_templates/](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/examples/metric_templates/README.md:1): optional comparison-rule examples.
+- [examples/datasets.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/examples/datasets.md:1): background reference only.
 
-Current advisor mode covers:
-
-- workspace inspection for FAQ and materialized benchmark scenarios
-- draft contract generation at `auto_optimize_outputs/optimization.contract.draft.yaml`
-- readiness report generation at `auto_optimize_outputs/readiness_report.json`
-- metric profile recommendation based on scenario type
-
-Current build and guided modes cover:
-
-- generated contract composition from scenario templates plus metric profiles
-- automatic workspace-relative `workspace.path` resolution
-- metric profile stamping through `builder_context`
-- a beginner-friendly `guided` path that produces readiness plus a generated contract in one pass
+Do not treat these assets as required shapes for user projects.
 
 ## Development
 
 ```bash
 pytest
 ```
-
-## Benchmark Planning Assets
-
-- Quickstart: `docs/quickstart.md`
-- Command guide: `docs/command-guide.md`
-- FAQ walkthrough: `docs/walkthrough-faq.md`
-- Benchmark walkthrough: `docs/walkthrough-benchmark.md`
-- Custom eval walkthrough: `docs/walkthrough-custom-eval.md`
-- Architecture overview: `docs/architecture-overview.md`
-- Skill improvement roadmap: `docs/skill-improvement-roadmap.md`
-- Examples index: `examples/README.md`
-- Public dataset analysis: `examples/datasets.md`
-- Benchmark contract templates: `examples/benchmarks/`
-- Benchmark workspace materializer: `scripts/materialize_benchmark_workspace.py`
-- Metric templates: `examples/metric_templates/`
-- Dataset downloader scaffold: `scripts/download_benchmark_dataset.py`
-- Dataset export bridge: `scripts/export_benchmark_dataset.py`
-- Metric reference: `docs/benchmark-metrics.md`
-- Contract metric profiles: `docs/contract-metric-profiles.md`
-
-The benchmark templates are designed for:
-
-- embedding quality
-- retrieval latency
-- reranking quality
-- embedding / index size tracking
-
-Materialized benchmark workspaces now include sample corpus/query/qrels assets plus a data-driven evaluation harness, so they can be validated and run end to end without external model dependencies.
-They also support optional provider-backed execution paths for real local embedding or reranking models with safe fallback to sample mode.
-For supported Hugging Face MTEB datasets, the download/export path now handles multi-config layouts and produces a normalized `auto_optimize_export/` directory that the materializer can ingest directly.

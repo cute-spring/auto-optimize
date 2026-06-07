@@ -36,6 +36,7 @@ class EvaluationConfig:
     output_format: str = "json"
     timeout_seconds: int = 600
     output_file: str | None = None
+    adapter: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)

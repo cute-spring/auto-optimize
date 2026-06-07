@@ -85,6 +85,29 @@ def _materialize_contract(tmp_path: Path, mutate=None) -> Path:
     return contract_path
 
 
+def _write_key_value_eval_script(workspace: Path) -> None:
+    (workspace / "eval" / "run_eval.py").write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env python3",
+                "from __future__ import annotations",
+                "",
+                'print("top1_accuracy: 0.901")',
+                'print("hit_at_3: 0.962")',
+                'print("recall_at_10: 0.983")',
+                'print("mrr: 0.782")',
+                'print("hard_negative_error_rate: 0.046")',
+                'print("embed_query_latency_p95_ms: 42")',
+                'print("rerank_latency_p95_ms: 97")',
+                'print("index_size_mb: 385")',
+                'print("all_tests_pass: true")',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_run_command_writes_baseline_artifacts(tmp_path: Path) -> None:
     contract_path = _materialize_contract(tmp_path)
 
@@ -273,6 +296,43 @@ def test_run_command_creates_branch_and_commits_accepted_changes(tmp_path: Path)
     assert "auto-optimize: exp_0002" in commit_subject
     assert commit_count == 2
     assert retrieval_config["retrieval"]["top_k"] == 20
+
+
+def test_run_command_generates_and_records_metrics_parser_adapter(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        _write_key_value_eval_script(workspace)
+        data["evaluation"] = {
+            "command": "python eval/run_eval.py",
+            "timeout_seconds": 60,
+            "adapter": {
+                "kind": "metrics_parser",
+                "template": "key_value_lines",
+                "output_dir": "auto_optimize_outputs/generated_adapters",
+                "purpose": "Parse key/value metrics into JSON.",
+                "declaration_source": "tests.generated_parser",
+                "risk_flags": ["generated_code", "metrics_parsing"],
+            },
+        }
+        data["run_policy"]["max_experiments"] = 1
+
+    contract_path = _materialize_contract(tmp_path, mutate=mutate)
+
+    exit_code = main(["run", str(contract_path)])
+
+    assert exit_code == 0
+
+    output_dir = tmp_path / "workspace" / "auto_optimize_outputs"
+    summary = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
+    validation_report = (output_dir / "contract_validation_report.md").read_text(encoding="utf-8")
+    report = (output_dir / "optimization_report.md").read_text(encoding="utf-8")
+    adapter_path = output_dir / "generated_adapters" / "metrics_parser_key_value_lines.py"
+
+    assert adapter_path.exists()
+    assert summary["generated_adapters"]
+    assert summary["generated_adapters"][0]["generated_path"] == str(adapter_path)
+    assert "Generated Adapters" in validation_report
+    assert "Generated Adapters" in report
+    assert summary["generated_adapters"][0]["kind"] == "metrics_parser"
 
 
 def test_run_command_can_push_accepted_branch_to_remote(tmp_path: Path) -> None:

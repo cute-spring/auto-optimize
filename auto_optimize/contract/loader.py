@@ -2,17 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import yaml
-
 from auto_optimize.contract.defaults import apply_contract_defaults
+from auto_optimize.contract.explainer import load_raw_contract_data
 from auto_optimize.shared.paths import resolve_contract_relative
 from auto_optimize.shared.schemas import OptimizationContract
 
 
 def load_contract(contract_path: str | Path) -> OptimizationContract:
     resolved_contract_path = Path(contract_path).resolve()
-    with resolved_contract_path.open("r", encoding="utf-8") as handle:
-        data = yaml.safe_load(handle) or {}
+    data = load_raw_contract_data(resolved_contract_path)
 
     contract = OptimizationContract.from_dict(data)
     contract.contract_path = resolved_contract_path
