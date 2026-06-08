@@ -9,6 +9,7 @@ import yaml
 from auto_optimize.cli import main
 from auto_optimize.contract.loader import load_contract
 from auto_optimize.contract.validator import validate_contract
+from auto_optimize.declaration.loader import load_declaration
 from auto_optimize.scenario_packs.benchmark_materializer import materialize_benchmark_workspace
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -59,8 +60,10 @@ def test_advisor_generates_valid_faq_draft_and_readiness_report(tmp_path: Path) 
     assert exit_code == 0
 
     output_dir = workspace / "auto_optimize_outputs"
+    declaration_path = output_dir / "optimization.declaration.draft.yaml"
     draft_path = output_dir / "optimization.contract.draft.yaml"
     readiness_path = output_dir / "readiness_report.json"
+    assert declaration_path.exists()
     assert draft_path.exists()
     assert readiness_path.exists()
 
@@ -68,11 +71,33 @@ def test_advisor_generates_valid_faq_draft_and_readiness_report(tmp_path: Path) 
     assert readiness["status"] == "ready"
     assert readiness["recommended_metric_profile"] == "faq_metrics"
     assert readiness["ready_for_run"] is True
+    assert readiness["draft_declaration_path"] == str(declaration_path)
+    assert readiness["declaration_first_next_actions"]
+    assert readiness["template_context"]["scenario_type"] == "faq_retrieval"
+    assert readiness["reference_fixture_context"]["fixture_kind"] == "faq_reference_fixture"
+    assert readiness["required_files"] == [
+        "configs/retrieval.yaml",
+        "configs/reranker.yaml",
+        "configs/embedding_strategy.yaml",
+        "eval/run_eval.py",
+    ]
+
+    declaration = load_declaration(declaration_path)
+    assert declaration.objective.description.startswith("Improve top1_accuracy")
+    assert declaration.workspace.path == ".."
+
+    declared_contract_path = output_dir / "optimization.contract.generated.yaml"
+    assert main(["declare", str(declaration_path), "--output", str(declared_contract_path)]) == 0
 
     contract = load_contract(draft_path)
     result = validate_contract(contract)
     assert result.valid
     assert result.baseline_metrics is not None
+
+    declared_contract = load_contract(declared_contract_path)
+    declared_result = validate_contract(declared_contract)
+    assert declared_result.valid
+    assert declared_contract.scenario.type == "generic_declaration"
 
 
 def test_advisor_infers_benchmark_scenario_and_generates_valid_draft(tmp_path: Path) -> None:
@@ -86,10 +111,20 @@ def test_advisor_infers_benchmark_scenario_and_generates_valid_draft(tmp_path: P
     readiness_path = materialized.workspace_path / "auto_optimize_outputs" / "readiness_report.json"
     readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
     draft = yaml.safe_load(draft_path.read_text(encoding="utf-8"))
+    declaration = yaml.safe_load(
+        (materialized.workspace_path / "auto_optimize_outputs" / "optimization.declaration.draft.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
 
     assert readiness["recommended_metric_profile"] == "embedding_metrics"
     assert readiness["benchmark_key"] == "du_retrieval"
     assert draft["workspace"]["path"] == ".."
+    assert declaration["workspace"]["path"] == ".."
+    assert declaration["comparison"]["primary_metric"] == draft["metrics"]["primary"]["name"]
+    assert readiness["template_context"]["benchmark_key"] == "du_retrieval"
+    assert readiness["reference_fixture_context"]["fixture_kind"] == "benchmark_reference_fixture"
+    assert "eval/run_benchmark_eval.py" in readiness["required_files"]
 
     contract = load_contract(draft_path)
     result = validate_contract(contract)
@@ -113,3 +148,5 @@ def test_advisor_flags_missing_files_in_readiness_report(tmp_path: Path) -> None
     assert readiness["ready_for_run"] is False
     assert "configs/reranker.yaml" in readiness["missing_files"]
     assert "eval/run_eval.py" in readiness["missing_files"]
+    assert readiness["draft_declaration_path"].endswith("optimization.declaration.draft.yaml")
+    assert readiness["declaration_first_next_actions"]

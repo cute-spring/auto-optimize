@@ -82,8 +82,13 @@ Current executable slice:
 
 - `yaml_path`
 - `json_path`
+- `env_var`
+- `cli_arg`
 
-The other kinds remain future declaration targets until dynamic adapter generation is implemented.
+`env_var` uses `target` as the environment variable name and should list `env:NAME` entries in `safety.editable`.
+`cli_arg` uses `target` as the flag name, for example `--mode`, and should list `cmd_arg:FLAG` entries in `safety.editable`.
+
+The other kinds remain future declaration targets until their execution adapters are implemented.
 
 ### `evaluation`
 
@@ -107,9 +112,11 @@ Current executable slice:
 
 - `stdout_json`
 - `metrics_json`
+- `csv_with_summary`
 - `generated_parser`
 
 When `metrics_source: metrics_json` is used, also declare `metrics_path`.
+When `metrics_source: csv_with_summary` is used, also declare `metrics_path`; AutoOptimize reads the last non-empty CSV row as the summary metrics object.
 When `metrics_source: generated_parser` is used, also declare `parser_template` and enable `adapter_generation.allowed: true`.
 
 Supported executable parser templates in this slice:

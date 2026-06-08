@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import csv
 import json
 import subprocess
 import sys
+from io import StringIO
 from dataclasses import dataclass
 from typing import Any
 
@@ -82,6 +84,48 @@ if __name__ == "__main__":
 
 def _generated_adapter_dir(contract: OptimizationContract, output_dir: str) -> Path:
     return resolve_workspace_relative(contract.workspace_path, output_dir)
+
+
+def _coerce_metric_value(raw: str) -> Any:
+    value = raw.strip()
+    lowered = value.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    try:
+        if "." in value:
+            return float(value)
+        return int(value)
+    except ValueError:
+        return value
+
+
+def _parse_csv_summary_metrics(raw_output: str) -> dict[str, Any]:
+    reader = csv.DictReader(StringIO(raw_output))
+    if not reader.fieldnames:
+        raise EvaluationExecutionError(
+            code="invalid_evaluation_output",
+            message="CSV summary output must include a header row with metric names.",
+        )
+
+    rows = [row for row in reader if any((value or "").strip() for value in row.values())]
+    if not rows:
+        raise EvaluationExecutionError(
+            code="invalid_evaluation_output",
+            message="CSV summary output must include at least one non-empty data row.",
+        )
+
+    summary_row = rows[-1]
+    metrics: dict[str, Any] = {}
+    for key, value in summary_row.items():
+        if key is None:
+            continue
+        normalized_key = key.strip()
+        if not normalized_key:
+            continue
+        metrics[normalized_key] = _coerce_metric_value(value or "")
+    return metrics
 
 
 def _ensure_generated_adapter(contract: OptimizationContract, adapter_config: dict[str, Any]) -> Path:
@@ -194,19 +238,22 @@ def execute_evaluation_with_details(contract: OptimizationContract) -> Evaluatio
     if contract.evaluation.adapter:
         return _run_generated_metrics_parser(contract, raw_output, contract.evaluation.adapter)
 
-    try:
-        metrics = json.loads(raw_output)
-    except json.JSONDecodeError as exc:
-        raise EvaluationExecutionError(
-            code="invalid_evaluation_output",
-            message=f"Evaluation output is not valid JSON: {exc}",
-        ) from exc
+    if contract.evaluation.output_format == "csv_with_summary":
+        metrics = _parse_csv_summary_metrics(raw_output)
+    else:
+        try:
+            metrics = json.loads(raw_output)
+        except json.JSONDecodeError as exc:
+            raise EvaluationExecutionError(
+                code="invalid_evaluation_output",
+                message=f"Evaluation output is not valid JSON: {exc}",
+            ) from exc
 
-    if not isinstance(metrics, dict):
-        raise EvaluationExecutionError(
-            code="invalid_evaluation_shape",
-            message="Evaluation output JSON must be an object.",
-        )
+        if not isinstance(metrics, dict):
+            raise EvaluationExecutionError(
+                code="invalid_evaluation_shape",
+                message="Evaluation output JSON must be an object.",
+            )
 
     return EvaluationOutcome(metrics=metrics, generated_adapters=[])
 

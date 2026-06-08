@@ -124,8 +124,14 @@ def explain_contract_markdown(contract: OptimizationContract, raw_data: dict[str
         for name, parameter in contract.search_space.items():
             sample_values = ", ".join(repr(value) for value in parameter.values[:4])
             value_suffix = "" if len(parameter.values) <= 4 else ", ..."
+            if parameter.mapping.type == "env_var":
+                location = "<env>"
+            elif parameter.mapping.type == "cli_arg":
+                location = "<cli_arg>"
+            else:
+                location = parameter.mapping.path or "<unknown>"
             lines.append(
-                f"- `{name}` -> `{parameter.mapping.file}` at `{parameter.mapping.path}` "
+                f"- `{name}` -> `{parameter.mapping.file}` at `{location}` "
                 f"with {len(parameter.values)} value(s): {sample_values}{value_suffix}"
             )
 

@@ -20,7 +20,7 @@ class WorkspaceConfig:
 class SearchSpaceMapping:
     type: str
     file: str
-    path: str
+    path: str | None = None
     create_if_missing: bool = False
 
 

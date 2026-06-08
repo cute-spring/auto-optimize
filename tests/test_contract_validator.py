@@ -105,6 +105,113 @@ def test_empty_search_space_fails(tmp_path: Path) -> None:
     assert any(issue.code == "empty_search_space" for issue in result.issues)
 
 
+def test_env_var_mapping_is_supported_when_scope_allows_it(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        data["editable_scope"] = ["env:AUTO_OPTIMIZE_MODE", "configs/retrieval.yaml", "configs/reranker.yaml"]
+        data["search_space"] = {
+            "mode": {
+                "values": ["baseline", "fast"],
+                "mapping": {
+                    "type": "env_var",
+                    "file": "AUTO_OPTIMIZE_MODE",
+                },
+            }
+        }
+
+    _, result = _validate(tmp_path, mutate=mutate)
+
+    assert result.valid
+
+
+def test_env_var_mapping_outside_editable_scope_fails(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        data["search_space"] = {
+            "mode": {
+                "values": ["baseline", "fast"],
+                "mapping": {
+                    "type": "env_var",
+                    "file": "AUTO_OPTIMIZE_MODE",
+                },
+            }
+        }
+
+    _, result = _validate(tmp_path, mutate=mutate)
+
+    assert not result.valid
+    assert any(issue.code == "env_var_not_editable" for issue in result.issues)
+
+
+def test_cli_arg_mapping_is_supported_when_scope_allows_it(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        data["editable_scope"] = ["cmd_arg:--mode", "configs/retrieval.yaml", "configs/reranker.yaml"]
+        data["search_space"] = {
+            "mode": {
+                "values": ["baseline", "fast"],
+                "mapping": {
+                    "type": "cli_arg",
+                    "file": "--mode",
+                },
+            }
+        }
+
+    _, result = _validate(tmp_path, mutate=mutate)
+
+    assert result.valid
+
+
+def test_cli_arg_mapping_outside_editable_scope_fails(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        data["search_space"] = {
+            "mode": {
+                "values": ["baseline", "fast"],
+                "mapping": {
+                    "type": "cli_arg",
+                    "file": "--mode",
+                },
+            }
+        }
+
+    _, result = _validate(tmp_path, mutate=mutate)
+
+    assert not result.valid
+    assert any(issue.code == "cli_arg_not_editable" for issue in result.issues)
+
+
+def test_cli_arg_commit_accepted_changes_is_not_supported(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        data["editable_scope"] = ["cmd_arg:--mode", "configs/retrieval.yaml", "configs/reranker.yaml"]
+        data["search_space"] = {
+            "mode": {
+                "values": ["baseline", "fast"],
+                "mapping": {
+                    "type": "cli_arg",
+                    "file": "--mode",
+                },
+            }
+        }
+        data["version_control"]["enabled"] = True
+        data["version_control"]["require_clean_worktree"] = False
+        data["version_control"]["create_branch"] = False
+        data["version_control"]["commit_accepted_changes"] = True
+
+    _, result = _validate(tmp_path, mutate=mutate)
+
+    assert not result.valid
+    assert any(issue.code == "cli_arg_commit_not_supported" for issue in result.issues)
+
+
+def test_csv_summary_output_format_requires_output_file(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        data["evaluation"]["command"] = "python eval/run_eval.py"
+        data["evaluation"]["output_format"] = "csv_with_summary"
+        data["evaluation"].pop("output_file", None)
+
+    _, result = _validate(tmp_path, mutate=mutate)
+
+    assert not result.valid
+    assert any(issue.code == "missing_csv_summary_output_file" for issue in result.issues)
+
+
 def test_eval_scope_violation_fails(tmp_path: Path) -> None:
     _, result = _validate(
         tmp_path,

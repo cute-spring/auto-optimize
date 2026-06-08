@@ -15,7 +15,7 @@ class Candidate:
     @property
     def fingerprint(self) -> str:
         return "||".join(
-            f"{change.parameter}::{change.value}::{change.mapping.file}::{change.mapping.path}"
+            f"{change.parameter}::{change.value}::{change.mapping.file}::{change.mapping.path or ''}"
             for change in self.changes
         )
 

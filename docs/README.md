@@ -8,6 +8,7 @@ Read these first:
 - `command-guide.md`: current CLI commands and their transitional role.
 - `architecture-overview.md`: how declarations, generated adapters, validation, runner, reports, and Git fit together.
 - `skill-improvement-roadmap.md`: roadmap aligned to the generic skill direction.
+- `release_readiness_gate/README.md`: governance, release gate, and status-audit support artifacts.
 
 Reference docs:
 

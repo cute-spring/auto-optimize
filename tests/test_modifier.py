@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -131,3 +132,36 @@ def test_apply_candidate_changes_updates_same_yaml_file_and_restores_snapshots(t
     restored = yaml.safe_load((tmp_path / "workspace" / "configs" / "retrieval.yaml").read_text(encoding="utf-8"))
     assert restored["retrieval"]["top_k"] == 10
     assert restored["retrieval"]["threshold"] == 0.82
+
+
+def test_apply_parameter_value_updates_env_var_and_restores_snapshot(tmp_path: Path) -> None:
+    contract = _materialize_contract(tmp_path)
+    env_name = "AUTO_OPTIMIZE_TEST_FLAG"
+    contract.editable_scope.append(f"env:{env_name}")
+    mapping = SearchSpaceMapping(type="env_var", file=env_name)
+
+    os.environ.pop(env_name, None)
+    change, snapshot = apply_parameter_value(contract, "feature_flag", mapping, "enabled")
+
+    assert change.before is None
+    assert change.after == "enabled"
+    assert os.environ[env_name] == "enabled"
+
+    restore_snapshot(contract, snapshot)
+    assert env_name not in os.environ
+
+
+def test_apply_parameter_value_updates_cli_arg_and_restores_snapshot(tmp_path: Path) -> None:
+    contract = _materialize_contract(tmp_path)
+    contract.editable_scope.append("cmd_arg:--mode")
+    mapping = SearchSpaceMapping(type="cli_arg", file="--mode")
+    original_command = contract.evaluation.command
+
+    change, snapshot = apply_parameter_value(contract, "mode", mapping, "turbo")
+
+    assert change.before is None
+    assert change.after == "turbo"
+    assert contract.evaluation.command.endswith("--mode turbo")
+
+    restore_snapshot(contract, snapshot)
+    assert contract.evaluation.command == original_command

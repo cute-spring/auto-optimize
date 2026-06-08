@@ -79,6 +79,8 @@ Supported mapping types:
 
 - `yaml_path`
 - `json_path`
+- `env_var`
+- `cli_arg`
 
 ### `evaluation.command`
 
@@ -90,6 +92,17 @@ Current onboarding recommendation:
 
 - `python eval/run_eval.py --json`
 - `python eval/run_benchmark_eval.py --json`
+
+### `evaluation.output_format`
+
+What it means:
+
+- how AutoOptimize should interpret evaluation output after the command finishes
+
+Supported values in the current slice:
+
+- `json`
+- `csv_with_summary`
 
 ### `metrics.primary`
 

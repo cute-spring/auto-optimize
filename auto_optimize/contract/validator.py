@@ -20,6 +20,7 @@ from auto_optimize.shared.schemas import OptimizationContract, SearchSpaceParame
 SUPPORTED_GENERATED_ADAPTERS = {
     ("metrics_parser", "key_value_lines"),
 }
+SUPPORTED_EVALUATION_OUTPUT_FORMATS = {"json", "csv_with_summary"}
 
 
 def _load_structured_file(path: Path, mapping_type: str) -> Any:
@@ -52,13 +53,107 @@ def _validate_search_parameter(
         return
 
     mapping = parameter.mapping
-    if mapping.type not in {"yaml_path", "json_path"}:
+    if mapping.type not in {"yaml_path", "json_path", "env_var", "cli_arg"}:
         result.add_issue(
             "error",
             "unsupported_mapping_type",
             f"Search space parameter '{name}' uses unsupported mapping type '{mapping.type}'.",
             field=f"search_space.{name}.mapping.type",
-            hint="Use `yaml_path` or `json_path` so AutoOptimize knows how to edit the target file.",
+            hint="Use `yaml_path`, `json_path`, `env_var`, or `cli_arg` so AutoOptimize knows how to mutate the target.",
+        )
+        return
+
+    if mapping.type == "env_var":
+        env_name = mapping.file.strip()
+        env_scope = f"env:{env_name}"
+        if not env_name:
+            result.add_issue(
+                "error",
+                "missing_env_var_name",
+                f"Search space parameter '{name}' must declare a non-empty env var target.",
+                field=f"search_space.{name}.mapping.file",
+                hint="Use `mapping.file` to declare the environment variable name, for example `FEATURE_FLAG`.",
+            )
+            return
+        if mapping.path not in (None, ""):
+            result.add_issue(
+                "error",
+                "env_var_path_not_supported",
+                f"Search space parameter '{name}' uses env_var and must not declare mapping.path.",
+                field=f"search_space.{name}.mapping.path",
+                hint="Remove `mapping.path` for `env_var` parameters. The environment variable name belongs in `mapping.file`.",
+            )
+        if not is_editable(env_scope, contract.editable_scope):
+            result.add_issue(
+                "error",
+                "env_var_not_editable",
+                f"Search space parameter '{name}' points to env var '{env_name}', which is outside editable_scope.",
+                field=f"search_space.{name}.mapping.file",
+                hint=f"Add `env:{env_name}` to `editable_scope` so AutoOptimize may modify this environment variable.",
+            )
+        if is_protected(env_scope, contract.protected_scope):
+            result.add_issue(
+                "error",
+                "env_var_protected",
+                f"Search space parameter '{name}' points to protected env var '{env_name}'.",
+                field=f"search_space.{name}.mapping.file",
+                hint="Environment variables cannot be both editable and protected.",
+            )
+        return
+
+    if mapping.type == "cli_arg":
+        argument_name = mapping.file.strip()
+        argument_scope = f"cmd_arg:{argument_name}"
+        if not argument_name:
+            result.add_issue(
+                "error",
+                "missing_cli_arg_name",
+                f"Search space parameter '{name}' must declare a non-empty cli arg target.",
+                field=f"search_space.{name}.mapping.file",
+                hint="Use `mapping.file` to declare the CLI argument name, for example `--mode`.",
+            )
+            return
+        if not argument_name.startswith("-"):
+            result.add_issue(
+                "error",
+                "invalid_cli_arg_name",
+                f"Search space parameter '{name}' must target a flag-style CLI argument such as `--mode`.",
+                field=f"search_space.{name}.mapping.file",
+                hint="Use a dash-prefixed flag name for `cli_arg`, for example `--temperature`.",
+            )
+        if mapping.path not in (None, ""):
+            result.add_issue(
+                "error",
+                "cli_arg_path_not_supported",
+                f"Search space parameter '{name}' uses cli_arg and must not declare mapping.path.",
+                field=f"search_space.{name}.mapping.path",
+                hint="Remove `mapping.path` for `cli_arg` parameters. The argument flag belongs in `mapping.file`.",
+            )
+        if not is_editable(argument_scope, contract.editable_scope):
+            result.add_issue(
+                "error",
+                "cli_arg_not_editable",
+                f"Search space parameter '{name}' points to cli arg '{argument_name}', which is outside editable_scope.",
+                field=f"search_space.{name}.mapping.file",
+                hint=f"Add `cmd_arg:{argument_name}` to `editable_scope` so AutoOptimize may modify this CLI argument.",
+            )
+        if is_protected(argument_scope, contract.protected_scope):
+            result.add_issue(
+                "error",
+                "cli_arg_protected",
+                f"Search space parameter '{name}' points to protected cli arg '{argument_name}'.",
+                field=f"search_space.{name}.mapping.file",
+                hint="CLI arguments cannot be both editable and protected.",
+            )
+        return
+
+    if not mapping.path:
+        result.add_issue(
+            "error",
+            "missing_mapping_path",
+            f"Search space parameter '{name}' must declare a dotted mapping path.",
+            field=f"search_space.{name}.mapping.path",
+            hint="Provide the dotted path to the YAML or JSON field that AutoOptimize should mutate.",
         )
         return
 
@@ -260,6 +355,28 @@ def _validate_evaluation_adapter(contract: OptimizationContract, result: Validat
         )
 
 
+def _validate_evaluation_config(contract: OptimizationContract, result: ValidationResult) -> None:
+    output_format = contract.evaluation.output_format
+    if output_format not in SUPPORTED_EVALUATION_OUTPUT_FORMATS:
+        result.add_issue(
+            "error",
+            "unsupported_evaluation_output_format",
+            f"Unsupported evaluation.output_format `{output_format}`.",
+            field="evaluation.output_format",
+            hint="Use `json` for JSON metrics or `csv_with_summary` for a summary CSV artifact.",
+        )
+        return
+
+    if output_format == "csv_with_summary" and not contract.evaluation.output_file:
+        result.add_issue(
+            "error",
+            "missing_csv_summary_output_file",
+            "evaluation.output_file is required when evaluation.output_format is `csv_with_summary`.",
+            field="evaluation.output_file",
+            hint="Point `evaluation.output_file` at the CSV artifact containing the summary metrics row.",
+        )
+
+
 def _run_baseline_evaluation(contract: OptimizationContract, result: ValidationResult) -> None:
     try:
         outcome = execute_evaluation_with_details(contract)
@@ -333,6 +450,17 @@ def validate_contract(contract: OptimizationContract) -> ValidationResult:
         for name, parameter in contract.search_space.items():
             _validate_search_parameter(name, parameter, contract, result)
 
+    if contract.version_control.commit_accepted_changes and any(
+        parameter.mapping.type == "cli_arg" for parameter in contract.search_space.values()
+    ):
+        result.add_issue(
+            "error",
+            "cli_arg_commit_not_supported",
+            "version_control.commit_accepted_changes is not supported for cli_arg search parameters in this slice.",
+            field="version_control.commit_accepted_changes",
+            hint="Disable accepted-change commits for cli_arg runs, or use file-backed parameters so accepted state can be committed.",
+        )
+
     for inferred_path in infer_eval_paths(contract.evaluation.command):
         if is_editable(inferred_path, contract.editable_scope):
             result.add_issue(
@@ -352,6 +480,7 @@ def validate_contract(contract: OptimizationContract) -> ValidationResult:
             )
 
     _validate_evaluation_adapter(contract, result)
+    _validate_evaluation_config(contract, result)
 
     if result.valid:
         _run_baseline_evaluation(contract, result)

@@ -53,6 +53,10 @@ SCENARIO_REQUIRED_FILES = {
 }
 
 
+def _relative_repo_path(path: Path) -> str:
+    return path.relative_to(_REPO_ROOT).as_posix()
+
+
 def load_yaml_file(path: Path) -> dict[str, Any]:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
@@ -130,6 +134,33 @@ def detect_protected_scope(workspace: Path) -> list[str]:
     return protected
 
 
+def resolve_reference_fixture_context(scenario: str, benchmark_key: str | None, metric_profile: str) -> dict[str, Any]:
+    if scenario == "faq_retrieval":
+        contract_template_path = _REPO_ROOT / "examples" / "faq_retrieval" / "optimization.contract.yaml"
+        fixture_kind = "faq_reference_fixture"
+    elif benchmark_key and benchmark_key in BENCHMARK_SPECS:
+        template_name = BENCHMARK_SPECS[benchmark_key].template_name
+        contract_template_path = _REPO_ROOT / "examples" / "benchmarks" / template_name
+        fixture_kind = "benchmark_reference_fixture"
+    elif scenario == "retrieval_embedding_benchmark":
+        contract_template_path = _REPO_ROOT / "examples" / "benchmarks" / "embedding_accuracy_en_scifact.contract.yaml"
+        fixture_kind = "benchmark_reference_fixture"
+    elif scenario == "reranking_benchmark":
+        contract_template_path = _REPO_ROOT / "examples" / "benchmarks" / "reranking_zh_cmedqa.contract.yaml"
+        fixture_kind = "benchmark_reference_fixture"
+    else:
+        raise ValueError(f"Unsupported scenario template: {scenario}")
+
+    metric_template_path = _REPO_ROOT / "examples" / "metric_templates" / f"{metric_profile}.yaml"
+    return {
+        "fixture_kind": fixture_kind,
+        "scenario_type": scenario,
+        "benchmark_key": benchmark_key,
+        "contract_template_path": _relative_repo_path(contract_template_path),
+        "metric_template_path": _relative_repo_path(metric_template_path),
+    }
+
+
 def load_template_payload(scenario: str, benchmark_key: str | None) -> dict[str, Any]:
     if scenario == "faq_retrieval":
         template_path = _REPO_ROOT / "examples" / "faq_retrieval" / "optimization.contract.yaml"
@@ -161,6 +192,7 @@ def load_metric_profile(metric_profile: str) -> dict[str, Any]:
 def list_available_templates() -> dict[str, Any]:
     return {
         "scenarios": sorted(SCENARIO_TO_PROFILE),
+        "reference_fixtures": sorted(SCENARIO_TO_PROFILE),
         "metric_profiles": sorted(path.stem for path in (_REPO_ROOT / "examples" / "metric_templates").glob("*.yaml")),
         "benchmark_datasets": sorted(BENCHMARK_SPECS),
         "default_metric_profiles": SCENARIO_TO_PROFILE,
@@ -203,6 +235,7 @@ def build_contract_payload(
     benchmark_manifest: dict[str, Any] | None = None,
     contract_style: str = "expanded",
 ) -> dict[str, Any]:
+    reference_fixture_context = resolve_reference_fixture_context(scenario, benchmark_key, metric_profile)
     payload = load_template_payload(scenario, benchmark_key)
     metric_sections = load_metric_profile(metric_profile)
 
@@ -220,6 +253,7 @@ def build_contract_payload(
     payload.setdefault("builder_context", {})
     payload["builder_context"]["metric_profile"] = metric_profile
     payload["builder_context"]["contract_style"] = contract_style
+    payload["builder_context"]["reference_fixture_context"] = reference_fixture_context
     if benchmark_key is not None:
         payload["builder_context"]["benchmark_key"] = benchmark_key
     if benchmark_manifest is not None:

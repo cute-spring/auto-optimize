@@ -1,0 +1,58 @@
+source_checklist: /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/plans/AutoOptimize_Execution_Checklist_20260608.md
+last_refreshed: 2026-06-08
+
+global_signals:
+  full_pytest_status: passing
+  full_pytest_result: "79 passed"
+  declaration_first_default_path: true
+  generated_adapter_runtime_execution: true
+  trust_reporting_sections_present: true
+
+stages:
+  priority_1:
+    label: Dynamic Adapter Minimal Loop
+    expected_items: 10
+    completed_items: 10
+    status: complete
+    evidence:
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_run_command.py
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_declaration_command.py
+  priority_2:
+    label: Guided Path De-Scenarization
+    expected_items: 14
+    completed_items: 14
+    status: complete
+    evidence:
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/advisor/service.py
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/cli.py
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_builder_command.py
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_advisor_command.py
+  priority_3:
+    label: Trust And Reporting
+    expected_items: 6
+    completed_items: 6
+    status: complete
+    evidence:
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/reporting/report_generator.py
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/runner/orchestrator.py
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_run_command.py
+  priority_4:
+    label: Declaration Execution Coverage
+    expected_items: 6
+    completed_items: 6
+    status: complete
+    evidence:
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/declaration/converter.py
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/contract/validator.py
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/runner/evaluator.py
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_declaration_command.py
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_contract_validator.py
+  priority_5:
+    label: Governance And Release Artifacts
+    expected_items: 6
+    completed_items: 6
+    status: complete
+    evidence:
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/release_readiness_gate/README.md
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/release_readiness_gate/release_readiness_template.md
+      - /Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/release_readiness_gate/definition_of_done.md

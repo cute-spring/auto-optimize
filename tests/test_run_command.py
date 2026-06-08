@@ -151,6 +151,15 @@ def test_run_command_writes_baseline_artifacts(tmp_path: Path) -> None:
     assert summary["memory"]["total_runs"] == 1
     assert summary["memory"]["current_run_is_historical_best"] is True
     assert len(summary["accepted_candidates"]) == 4
+    assert summary["asset_context"]["declaration_input"]["present"] is False
+    assert summary["asset_context"]["generated_contract"]["present"] is True
+    assert summary["asset_context"]["generated_contract"]["scenario_type"] == "faq_retrieval"
+    assert summary["asset_context"]["generated_adapters"]["count"] == 0
+    assert summary["adapter_provenance"] == []
+    assert summary["risk_flags"] == []
+    assert summary["decision_rationale_summary"]["accepted_reason_count"] >= 1
+    assert summary["decision_rationale_summary"]["rejected_reason_count"] >= 1
+    assert summary["decision_rationale_summary"]["failed_evaluation_count"] == 0
 
     records = [json.loads(line) for line in jsonl_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     history_records = [json.loads(line) for line in history_path.read_text(encoding="utf-8").splitlines() if line.strip()]
@@ -168,6 +177,10 @@ def test_run_command_writes_baseline_artifacts(tmp_path: Path) -> None:
     assert "Baseline Metrics" in report_text
     assert "Best Metrics" in report_text
     assert "Accepted Experiments" in report_text
+    assert "Asset Provenance" in report_text
+    assert "Adapter Provenance" in report_text
+    assert "Risk Flags" in report_text
+    assert "Decision Rationale Summary" in report_text
     assert "Pareto Frontier" in report_text
     assert "Experiment Memory" in report_text
     assert "top1_accuracy" in report_text
@@ -220,15 +233,19 @@ def test_run_command_supports_pareto_frontier_decision_mode(tmp_path: Path) -> N
     assert any(candidate["primary_metric_improvement"] < 0 for candidate in summary["accepted_candidates"])
 
 
-def test_run_command_fails_when_validation_fails(tmp_path: Path) -> None:
+def test_run_command_fails_when_validation_fails(tmp_path: Path, capsys) -> None:
     def mutate(data, workspace):
         data["metrics"]["primary"]["name"] = "missing_metric"
 
     contract_path = _materialize_contract(tmp_path, mutate=mutate)
 
     exit_code = main(["run", str(contract_path)])
+    captured = capsys.readouterr()
 
     assert exit_code == 1
+    assert "Contract validation failed before run:" in captured.out
+    assert "Hint:" in captured.out
+    assert "Next step: run `python -m auto_optimize.cli validate" in captured.out
 
 
 def test_run_command_rolls_back_failed_evaluation(tmp_path: Path) -> None:
@@ -256,6 +273,11 @@ def test_run_command_rolls_back_failed_evaluation(tmp_path: Path) -> None:
     assert summary["rejected_experiments"] == 2
     assert summary["failed_evaluations"] == 1
     assert summary["memory"]["total_runs"] == 1
+    assert summary["decision_rationale_summary"]["failed_evaluation_count"] == 1
+    assert any(
+        "Evaluation command failed during execution." in entry["reason"]
+        for entry in summary["decision_rationale_summary"]["top_reject_reasons"]
+    )
     assert retrieval_config["retrieval"]["top_k"] == 10
     assert records[-1]["decision"] == "rejected"
     assert records[-1]["rollback_performed"] is True
@@ -329,10 +351,76 @@ def test_run_command_generates_and_records_metrics_parser_adapter(tmp_path: Path
 
     assert adapter_path.exists()
     assert summary["generated_adapters"]
+    assert summary["asset_context"]["generated_adapters"]["count"] == 1
+    assert summary["asset_context"]["generated_adapters"]["paths"] == [str(adapter_path)]
+    assert len(summary["adapter_provenance"]) == 1
+    assert summary["adapter_provenance"][0]["declaration_source"] == "tests.generated_parser"
+    assert summary["adapter_provenance"][0]["trigger"]["evaluation_adapter_kind"] == "metrics_parser"
+    assert {entry["flag"] for entry in summary["risk_flags"]} >= {
+        "generated_code",
+        "metrics_parsing",
+        "external_eval_command",
+    }
     assert summary["generated_adapters"][0]["generated_path"] == str(adapter_path)
     assert "Generated Adapters" in validation_report
+    assert "Asset Provenance" in report
+    assert "Adapter Provenance" in report
+    assert "Risk Flags" in report
+    assert "Decision Rationale Summary" in report
+    assert "Declaration input" in report
+    assert "Generated contract" in report
     assert "Generated Adapters" in report
     assert summary["generated_adapters"][0]["kind"] == "metrics_parser"
+
+
+def test_run_command_supports_csv_summary_output_format(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        (workspace / "eval" / "run_eval.py").write_text(
+            "\n".join(
+                [
+                    "#!/usr/bin/env python3",
+                    "from __future__ import annotations",
+                    "",
+                    "from pathlib import Path",
+                    "import yaml",
+                    "",
+                    'retrieval = yaml.safe_load(Path("configs/retrieval.yaml").read_text(encoding="utf-8"))["retrieval"]',
+                    'top_k = retrieval["top_k"]',
+                    'summary_path = Path("reports/summary.csv")',
+                    "summary_path.parent.mkdir(parents=True, exist_ok=True)",
+                    'summary_path.write_text("top1_accuracy,latency_ms,all_tests_pass\\n" + ("0.910,120,true\\n" if top_k == 20 else "0.870,140,true\\n"), encoding="utf-8")',
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        data["evaluation"] = {
+            "command": "python eval/run_eval.py",
+            "output_format": "csv_with_summary",
+            "output_file": "reports/summary.csv",
+            "timeout_seconds": 60,
+        }
+        data["constraints"] = {
+            "latency_ms": {"max": 200},
+            "all_tests_pass": {"required": True},
+        }
+        data["run_policy"]["max_experiments"] = 2
+
+    contract_path = _materialize_contract(tmp_path, mutate=mutate)
+
+    exit_code = main(["run", str(contract_path)])
+
+    assert exit_code == 0
+
+    output_dir = tmp_path / "workspace" / "auto_optimize_outputs"
+    summary = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
+    report = (output_dir / "optimization_report.md").read_text(encoding="utf-8")
+
+    assert summary["best_metrics"]["top1_accuracy"] == 0.91
+    assert summary["accepted_experiments"] >= 1
+    assert summary["risk_flags"] == []
+    assert summary["adapter_provenance"] == []
+    assert "Decision Rationale Summary" in report
 
 
 def test_run_command_can_push_accepted_branch_to_remote(tmp_path: Path) -> None:
@@ -443,6 +531,10 @@ def test_report_command_regenerates_markdown_report(tmp_path: Path) -> None:
 
     assert exit_code == 0
     regenerated = report_path.read_text(encoding="utf-8")
+    assert "Asset Provenance" in regenerated
+    assert "Adapter Provenance" in regenerated
+    assert "Risk Flags" in regenerated
+    assert "Decision Rationale Summary" in regenerated
     assert "Baseline vs Best" in regenerated
     assert "Experiment Memory" in regenerated
 

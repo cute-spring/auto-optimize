@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections import Counter
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -103,6 +104,8 @@ def _update_pareto_frontier(
 def _capture_editable_file_snapshot(contract: OptimizationContract) -> dict[str, str]:
     snapshot: dict[str, str] = {}
     for relative_path in contract.editable_scope:
+        if relative_path.startswith("env:"):
+            continue
         target_path = resolve_workspace_relative(contract.workspace_path, relative_path)
         if target_path.exists() and target_path.is_file():
             snapshot[relative_path] = target_path.read_text(encoding="utf-8")
@@ -249,6 +252,158 @@ def _load_workspace_benchmark_context(workspace_path: Path) -> dict[str, Any] | 
     }
 
 
+def _build_asset_context(contract: OptimizationContract, generated_adapters: list[dict[str, Any]]) -> dict[str, Any]:
+    raw_contract = yaml.safe_load(contract.contract_path.read_text(encoding="utf-8")) or {}
+    declaration_context = raw_contract.get("declaration_context", {})
+    source_declaration = declaration_context.get("source_declaration")
+
+    return {
+        "declaration_input": {
+            "path": source_declaration,
+            "present": bool(source_declaration),
+        },
+        "generated_contract": {
+            "path": str(contract.contract_path),
+            "present": True,
+            "scenario_type": contract.scenario.type,
+        },
+        "generated_adapters": {
+            "count": len(generated_adapters),
+            "paths": [adapter["generated_path"] for adapter in generated_adapters],
+        },
+    }
+
+
+def _build_adapter_provenance(contract: OptimizationContract, generated_adapters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    raw_contract = yaml.safe_load(contract.contract_path.read_text(encoding="utf-8")) or {}
+    declaration_context = raw_contract.get("declaration_context", {})
+    declaration_evaluation = declaration_context.get("evaluation", {})
+    evaluation_adapter = raw_contract.get("evaluation", {}).get("adapter", {})
+
+    provenance: list[dict[str, Any]] = []
+    for adapter in generated_adapters:
+        generated_path = adapter.get("generated_path")
+        output_dir = None
+        if isinstance(generated_path, str) and generated_path:
+            output_dir = str(Path(generated_path).parent)
+
+        provenance.append(
+            {
+                "kind": adapter.get("kind"),
+                "template": adapter.get("template"),
+                "generated_path": generated_path,
+                "output_dir": output_dir or evaluation_adapter.get("output_dir"),
+                "purpose": adapter.get("purpose"),
+                "declaration_source": adapter.get("declaration_source"),
+                "risk_flags": list(adapter.get("risk_flags", [])),
+                "trigger": {
+                    "evaluation_adapter_kind": evaluation_adapter.get("kind"),
+                    "evaluation_adapter_template": evaluation_adapter.get("template"),
+                    "metrics_source": declaration_evaluation.get("metrics_source"),
+                    "parser_template": declaration_evaluation.get("parser_template"),
+                },
+            }
+        )
+    return provenance
+
+
+def _build_risk_flags(
+    contract: OptimizationContract,
+    generated_adapters: list[dict[str, Any]],
+    adapter_provenance: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    raw_contract = yaml.safe_load(contract.contract_path.read_text(encoding="utf-8")) or {}
+    builder_context = raw_contract.get("builder_context", {})
+    reference_fixture_context = builder_context.get("reference_fixture_context")
+
+    risk_reason_map = {
+        "generated_code": "This run generated executable helper code during evaluation.",
+        "metrics_parsing": "This run depends on generated parsing logic to convert raw output into metrics.",
+    }
+
+    risk_flags: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    if generated_adapters:
+        key = ("external_eval_command", "evaluation.command")
+        seen.add(key)
+        risk_flags.append(
+            {
+                "flag": "external_eval_command",
+                "source": "evaluation.command",
+                "reason": "This run executes a workspace evaluation command and trusts its output contract.",
+            }
+        )
+
+    if reference_fixture_context:
+        key = ("reference_fixture_context", "builder_context.reference_fixture_context")
+        seen.add(key)
+        risk_flags.append(
+            {
+                "flag": "reference_fixture_context",
+                "source": "builder_context.reference_fixture_context",
+                "reason": "This run uses scenario/template assets as reference fixtures rather than user-authored declarations alone.",
+            }
+        )
+
+    for entry in adapter_provenance:
+        source = entry.get("generated_path") or entry.get("kind") or "generated_adapter"
+        for flag in entry.get("risk_flags", []):
+            key = (str(flag), str(source))
+            if key in seen:
+                continue
+            seen.add(key)
+            risk_flags.append(
+                {
+                    "flag": flag,
+                    "source": source,
+                    "reason": risk_reason_map.get(
+                        str(flag),
+                        f"This run reported risk flag `{flag}` for a generated adapter artifact.",
+                    ),
+                }
+            )
+
+    return risk_flags
+
+
+def _summarize_reason_counts(records: list[dict[str, Any]], decision: str) -> list[dict[str, Any]]:
+    counter = Counter(
+        str(record.get("reason", "")).strip()
+        for record in records
+        if record.get("decision") == decision and str(record.get("reason", "")).strip()
+    )
+    return [
+        {"reason": reason, "count": count}
+        for reason, count in sorted(counter.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
+def _build_decision_rationale_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
+    experiment_records = [record for record in records if record.get("decision") != "baseline"]
+    accepted_reasons = _summarize_reason_counts(experiment_records, "accepted")
+    rejected_reasons = _summarize_reason_counts(experiment_records, "rejected")
+
+    def _count_matching(pattern: str) -> int:
+        lowered = pattern.lower()
+        return sum(1 for record in experiment_records if lowered in str(record.get("reason", "")).lower())
+
+    return {
+        "accepted_reason_count": len(accepted_reasons),
+        "rejected_reason_count": len(rejected_reasons),
+        "accepted_reasons": accepted_reasons,
+        "rejected_reasons": rejected_reasons,
+        "top_accept_reasons": accepted_reasons[:3],
+        "top_reject_reasons": rejected_reasons[:3],
+        "failed_evaluation_count": _count_matching("evaluation command failed during execution"),
+        "constraint_violation_count": _count_matching("violated one or more constraints"),
+        "below_threshold_count": _count_matching("below threshold"),
+        "non_improving_primary_metric_count": _count_matching("did not improve"),
+        "pareto_accept_count": _count_matching("added to pareto frontier"),
+        "pareto_reject_count": _count_matching("dominated by the current pareto frontier"),
+    }
+
+
 def _push_remote_artifacts(contract: OptimizationContract, git_context: GitRunContext, accepted_experiments: int) -> None:
     if not contract.version_control.enabled or not contract.version_control.push_remote or accepted_experiments == 0:
         return
@@ -294,7 +449,14 @@ def run_contract(contract: OptimizationContract) -> dict[str, Any]:
     validation_result = validate_contract(contract)
     validation_report_path = write_validation_report(contract, validation_result)
     if not validation_result.valid or validation_result.baseline_metrics is None:
-        messages = [f"[{issue.severity}] {issue.code}: {issue.message}" for issue in validation_result.issues]
+        messages: list[str] = []
+        for issue in validation_result.issues:
+            detail = f"[{issue.severity}] {issue.code}: {issue.message}"
+            if issue.field:
+                detail += f" Field: {issue.field}."
+            if issue.hint:
+                detail += f" Hint: {issue.hint}"
+            messages.append(detail)
         raise RuntimeError("Contract validation failed before run:\n" + "\n".join(messages))
 
     git_context = _prepare_git_run(contract, validation_result.git_state)
@@ -510,6 +672,9 @@ def run_contract(contract: OptimizationContract) -> dict[str, Any]:
         artifact_map["optimization_report_html"] = str(report_html_path)
 
     _push_remote_artifacts(contract, git_context, accepted_experiments)
+    adapter_provenance = _build_adapter_provenance(contract, validation_result.generated_adapters)
+    risk_flags = _build_risk_flags(contract, validation_result.generated_adapters, adapter_provenance)
+    decision_rationale_summary = _build_decision_rationale_summary(records)
 
     summary = {
         "status": "completed",
@@ -535,6 +700,10 @@ def run_contract(contract: OptimizationContract) -> dict[str, Any]:
         "constraints_satisfied": all(check.passed for check in constraint_checks),
         "constraint_checks": [asdict(check) for check in constraint_checks],
         "generated_adapters": validation_result.generated_adapters,
+        "asset_context": _build_asset_context(contract, validation_result.generated_adapters),
+        "adapter_provenance": adapter_provenance,
+        "risk_flags": risk_flags,
+        "decision_rationale_summary": decision_rationale_summary,
         "pareto_enabled": contract.pareto.enabled,
         "pareto_profiles": contract.pareto.profiles,
         "pareto_frontier": pareto_frontier,

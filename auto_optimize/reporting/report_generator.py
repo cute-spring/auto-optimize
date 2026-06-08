@@ -91,6 +91,28 @@ def generate_markdown_report(summary: dict[str, Any], baseline_metrics: dict[str
             )
 
     generated_adapters = summary.get("generated_adapters", [])
+    asset_context = summary.get("asset_context", {})
+    adapter_provenance = summary.get("adapter_provenance", [])
+    risk_flags = summary.get("risk_flags", [])
+    decision_rationale_summary = summary.get("decision_rationale_summary", {})
+    declaration_input = asset_context.get("declaration_input", {})
+    generated_contract = asset_context.get("generated_contract", {})
+    generated_adapter_assets = asset_context.get("generated_adapters", {})
+
+    lines.extend(["", "## Asset Provenance", ""])
+    if declaration_input.get("present"):
+        lines.append(f"- Declaration input: `{declaration_input.get('path')}`")
+    else:
+        lines.append("- Declaration input: `none recorded for this run`")
+    if generated_contract.get("present"):
+        lines.append(f"- Generated contract: `{generated_contract.get('path')}`")
+        lines.append(f"- Generated contract scenario: `{generated_contract.get('scenario_type')}`")
+    else:
+        lines.append("- Generated contract: `none recorded`")
+    lines.append(f"- Generated adapters count: `{generated_adapter_assets.get('count', 0)}`")
+    for path in generated_adapter_assets.get("paths", []):
+        lines.append(f"- Generated adapter artifact: `{path}`")
+
     lines.extend(["", "## Generated Adapters", ""])
     if not generated_adapters:
         lines.append("- No generated adapters were used in this run.")
@@ -101,6 +123,75 @@ def generate_markdown_report(summary: dict[str, Any], baseline_metrics: dict[str
                 f"`{adapter['kind']}` via `{adapter['template']}` generated `{adapter['generated_path']}` "
                 f"for `{adapter['purpose']}` with risk flags `{adapter['risk_flags']}`."
             )
+
+    lines.extend(["", "## Adapter Provenance", ""])
+    if not adapter_provenance:
+        lines.append("- No adapter provenance records were produced in this run.")
+    else:
+        for adapter in adapter_provenance:
+            lines.append(
+                "- "
+                f"`{adapter['kind']}` via `{adapter['template']}` came from "
+                f"`{adapter['declaration_source'] or 'no declaration source recorded'}` "
+                f"and wrote `{adapter['generated_path']}` under `{adapter['output_dir']}`."
+            )
+            trigger = adapter.get("trigger", {})
+            lines.append(
+                "- "
+                f"Trigger: metrics_source `{trigger.get('metrics_source')}`, "
+                f"parser_template `{trigger.get('parser_template')}`, "
+                f"evaluation adapter `{trigger.get('evaluation_adapter_kind')}` / `{trigger.get('evaluation_adapter_template')}`."
+            )
+
+    lines.extend(["", "## Risk Flags", ""])
+    if not risk_flags:
+        lines.append("- No explicit risk flags were recorded in this run.")
+    else:
+        for entry in risk_flags:
+            lines.append(
+                f"- `{entry['flag']}` from `{entry['source']}`: {entry['reason']}"
+            )
+
+    lines.extend(["", "## Decision Rationale Summary", ""])
+    if not decision_rationale_summary:
+        lines.append("- No decision rationale summary was recorded in this run.")
+    else:
+        lines.append(
+            f"- Accepted reason variants: `{decision_rationale_summary.get('accepted_reason_count', 0)}`"
+        )
+        lines.append(
+            f"- Rejected reason variants: `{decision_rationale_summary.get('rejected_reason_count', 0)}`"
+        )
+        lines.append(
+            f"- Failed evaluation rejections: `{decision_rationale_summary.get('failed_evaluation_count', 0)}`"
+        )
+        lines.append(
+            f"- Constraint violation rejections: `{decision_rationale_summary.get('constraint_violation_count', 0)}`"
+        )
+        lines.append(
+            f"- Below-threshold rejections: `{decision_rationale_summary.get('below_threshold_count', 0)}`"
+        )
+        lines.append(
+            f"- Non-improving rejections: `{decision_rationale_summary.get('non_improving_primary_metric_count', 0)}`"
+        )
+        lines.append(
+            f"- Pareto accepts: `{decision_rationale_summary.get('pareto_accept_count', 0)}`"
+        )
+        lines.append(
+            f"- Pareto rejects: `{decision_rationale_summary.get('pareto_reject_count', 0)}`"
+        )
+
+        top_accept_reasons = decision_rationale_summary.get("top_accept_reasons", [])
+        if top_accept_reasons:
+            lines.append("- Top accept reasons:")
+            for entry in top_accept_reasons:
+                lines.append(f"  - `{entry['reason']}` x `{entry['count']}`")
+
+        top_reject_reasons = decision_rationale_summary.get("top_reject_reasons", [])
+        if top_reject_reasons:
+            lines.append("- Top reject reasons:")
+            for entry in top_reject_reasons:
+                lines.append(f"  - `{entry['reason']}` x `{entry['count']}`")
 
     benchmark_context = summary.get("benchmark_context")
     if benchmark_context:

@@ -9,8 +9,8 @@ import yaml
 from auto_optimize.declaration.models import BudgetDeclaration, OptimizationDeclaration
 from auto_optimize.shared.paths import to_posix_relative
 
-SUPPORTED_VARIABLE_KINDS = {"yaml_path", "json_path"}
-SUPPORTED_METRICS_SOURCES = {"stdout_json", "metrics_json", "generated_parser"}
+SUPPORTED_VARIABLE_KINDS = {"yaml_path", "json_path", "env_var", "cli_arg"}
+SUPPORTED_METRICS_SOURCES = {"stdout_json", "metrics_json", "csv_with_summary", "generated_parser"}
 SUPPORTED_DIRECTIONS = {"maximize", "minimize"}
 DEFAULT_DECISION_RULE = "constrained_primary_metric"
 SUPPORTED_PARSER_TEMPLATES = {"key_value_lines"}
@@ -23,13 +23,13 @@ def _ensure_supported_declaration(declaration: OptimizationDeclaration) -> None:
     if unsupported_variable_kinds:
         raise ValueError(
             "This declaration uses variable kinds that are not executable in the current slice: "
-            f"{unsupported_variable_kinds}. Use `yaml_path` or `json_path` for now."
+            f"{unsupported_variable_kinds}. Use `yaml_path`, `json_path`, `env_var`, or `cli_arg` for now."
         )
 
     if declaration.evaluation.metrics_source not in SUPPORTED_METRICS_SOURCES:
         raise ValueError(
             "This declaration uses an evaluation metrics source that is not executable in the current slice: "
-            f"`{declaration.evaluation.metrics_source}`. Use `stdout_json` or `metrics_json` for now."
+            f"`{declaration.evaluation.metrics_source}`. Use `stdout_json`, `metrics_json`, `csv_with_summary`, or `generated_parser` for now."
         )
 
     directions = {declaration.comparison.direction}
@@ -44,6 +44,10 @@ def _ensure_supported_declaration(declaration: OptimizationDeclaration) -> None:
     if declaration.evaluation.metrics_source == "metrics_json" and not declaration.evaluation.metrics_path:
         raise ValueError(
             "`evaluation.metrics_path` is required when `evaluation.metrics_source` is `metrics_json`."
+        )
+    if declaration.evaluation.metrics_source == "csv_with_summary" and not declaration.evaluation.metrics_path:
+        raise ValueError(
+            "`evaluation.metrics_path` is required when `evaluation.metrics_source` is `csv_with_summary`."
         )
     if declaration.evaluation.metrics_source == "generated_parser":
         if declaration.adapter_generation is None or not declaration.adapter_generation.allowed:
@@ -102,8 +106,9 @@ def declaration_to_contract_data(
         mapping = {
             "type": variable.kind,
             "file": variable.target,
-            "path": variable.path,
         }
+        if variable.path is not None:
+            mapping["path"] = variable.path
         if variable.create_if_missing:
             mapping["create_if_missing"] = True
 
@@ -122,7 +127,7 @@ def declaration_to_contract_data(
 
     evaluation = {
         "command": declaration.evaluation.command,
-        "output_format": "json",
+        "output_format": "csv_with_summary" if declaration.evaluation.metrics_source == "csv_with_summary" else "json",
         "timeout_seconds": declaration.evaluation.timeout_seconds,
     }
     if declaration.evaluation.metrics_path:

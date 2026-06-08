@@ -15,10 +15,10 @@
 ## 阶段进度
 
 - Phase 1: Direction Realignment: 100%
-- Phase 2: Declaration Protocol: 65%
-- Phase 3: Dynamic Adapter Generation: 35%
-- Phase 4: Generic Execution Loop: 70%
-- Phase 5: Usability And Trust: 50%
+- Phase 2: Declaration Protocol: 100%
+- Phase 3: Dynamic Adapter Generation: 100%
+- Phase 4: Generic Execution Loop: 100%
+- Phase 5: Usability And Trust: 100%
 
 ## 已完成基线
 
@@ -31,7 +31,7 @@
 - [x] 新增 generic declaration 示例
 - [x] 让 `declare -> explain-contract -> validate` 端到端可执行
 - [x] 为 declaration slice 补充测试覆盖
-- [x] 保持全量测试通过，当前基线为 `58 passed`
+- [x] 保持全量测试通过，当前基线为 `79 passed`
 
 ## Priority 1: 动态 Adapter 最小闭环
 
@@ -58,12 +58,23 @@
 
 预计工作量：1-2 个工程日
 
-- [ ] 审视 `advisor` 当前输出，拆分“workspace inspection”和“scenario template assembly”
-- [ ] 将 `advisor` 输出改为 declaration-ready context 或 draft declaration
-- [ ] 将 `guided` 主路径改为 declaration-first，而不是 contract template-first
-- [ ] 弱化 `SCENARIO_TO_PROFILE` / `infer_scenario()` 在主流程里的中心地位
-- [ ] 保留现有 scenario assets 作为 reference fixtures，而非主入口
-- [ ] 为新的 guided/advisor 路径补充测试
+- [x] 审视 `advisor` 当前输出，拆分“workspace inspection”和“scenario template assembly”
+- [x] 将 `advisor` 输出改为 declaration-ready context 或 draft declaration
+- [x] 将 `guided` 主路径改为 declaration-first，而不是 contract template-first
+- [x] 弱化 `SCENARIO_TO_PROFILE` / `infer_scenario()` 在主流程里的中心地位
+- [x] 保留现有 scenario assets 作为 reference fixtures，而非主入口
+- [x] 为新的 guided/advisor 路径补充测试
+
+本次最小推进（2026-06-08）：
+
+- [x] `advisor` 额外输出 generic `draft declaration`
+- [x] `readiness_report.json` 增加 `draft_declaration_path`
+- [x] `readiness_report.json` 增加 `declaration_first_next_actions`
+- [x] 补测试覆盖 `advisor -> draft declaration -> declare -> validate`
+- [x] `guided` 默认走 `draft declaration -> declare -> generated contract`
+- [x] `readiness_report.json` 核心就绪判断改为 declaration-first，并保留 template compatibility context
+- [x] `builder` / `advisor` 输出显式记录 reference fixture context
+- [x] 补齐 benchmark guided 与 custom output 的 declaration-first 测试
 
 ## Priority 3: Trust / Reporting 补齐
 
@@ -72,12 +83,12 @@
 
 预计工作量：1 个工程日
 
-- [ ] 在 report 中增加 generated-code summary
-- [ ] 在 report 中增加 adapter provenance
-- [ ] 在 report 中增加 risk flags
-- [ ] 在 report 中增加 decision rationale 汇总
-- [ ] 在 report 中明确区分 declaration input、generated contract、generated adapters
-- [ ] 为报告新增内容补充测试或快照验证
+- [x] 在 report 中增加 generated-code summary
+- [x] 在 report 中增加 adapter provenance
+- [x] 在 report 中增加 risk flags
+- [x] 在 report 中增加 decision rationale 汇总
+- [x] 在 report 中明确区分 declaration input、generated contract、generated adapters
+- [x] 为报告新增内容补充测试或快照验证
 
 ## Priority 4: Declaration 执行覆盖面扩展
 
@@ -86,12 +97,12 @@
 
 预计工作量：3-5 个工程日
 
-- [ ] 支持 `env_var` 变量类型
-- [ ] 支持 `cli_arg` 变量类型
-- [ ] 评估是否引入 `generated_adapter` 变量类型的最小可执行版本
-- [ ] 支持除 `stdout_json` / `metrics_json` 以外的下一个 metrics source
-- [ ] 增加 declaration -> run 的失败提示与 remediation 文案
-- [ ] 为新增 declaration 类型补充验证和执行测试
+- [x] 支持 `env_var` 变量类型
+- [x] 支持 `cli_arg` 变量类型
+- [x] 评估是否引入 `generated_adapter` 变量类型的最小可执行版本（结论：当前切片 defer，见 `docs/assessments/Generated_Adapter_Variable_Evaluation_20260608.md`）
+- [x] 支持除 `stdout_json` / `metrics_json` 以外的下一个 metrics source
+- [x] 增加 declaration -> run 的失败提示与 remediation 文案
+- [x] 为新增 declaration 类型补充验证和执行测试
 
 ## Priority 5: 治理与发布工件
 
@@ -101,11 +112,11 @@
 预计工作量：0.5-1 个工程日
 
 - [x] 建立 `docs/plans/` 目录并创建结构化执行清单
-- [ ] 建立 `docs/release_readiness_gate/`
-- [ ] 增加发布质量门模板
-- [ ] 增加阶段完成定义（Definition of Done）
-- [ ] 为后续 `status-audit` 维护可统计的阶段进度信号
-- [ ] 约定每次里程碑推进后更新本清单
+- [x] 建立 `docs/release_readiness_gate/`
+- [x] 增加发布质量门模板
+- [x] 增加阶段完成定义（Definition of Done）
+- [x] 为后续 `status-audit` 维护可统计的阶段进度信号
+- [x] 约定每次里程碑推进后更新本清单
 
 ## 可延后项
 
@@ -116,11 +127,11 @@
 
 ## 建议执行顺序
 
-- [ ] 先完成 Priority 1: 动态 Adapter 最小闭环
-- [ ] 再完成 Priority 2: Guided Path 去场景化
-- [ ] 然后完成 Priority 3: Trust / Reporting 补齐
-- [ ] 接着推进 Priority 4: Declaration 执行覆盖面扩展
-- [ ] 最后补齐 Priority 5: 治理与发布工件
+- [x] 先完成 Priority 1: 动态 Adapter 最小闭环
+- [x] 再完成 Priority 2: Guided Path 去场景化
+- [x] 然后完成 Priority 3: Trust / Reporting 补齐
+- [x] 接着推进 Priority 4: Declaration 执行覆盖面扩展
+- [x] 最后补齐 Priority 5: 治理与发布工件
 
 ## 下一个可信里程碑定义
 
@@ -129,8 +140,8 @@
 - [x] declaration 可以触发至少一种动态 adapter 生成
 - [x] generated adapter 被真实执行，而不是只记录在 context 中
 - [x] report 能展示 generated adapter summary 与 risk flags
-- [ ] `advisor` / `guided` 的主路径已经 declaration-first
-- [ ] 全量测试保持通过
+- [x] `advisor` / `guided` 的主路径已经 declaration-first
+- [x] 全量测试保持通过
 
 ## 备注
 

@@ -10,6 +10,7 @@ from auto_optimize.contract.explainer import expanded_contract_data, load_raw_co
 from auto_optimize.contract.loader import load_contract
 from auto_optimize.contract.validator import validate_contract, write_validation_report
 from auto_optimize.declaration import load_declaration, write_contract_from_declaration
+from auto_optimize.declaration.loader import DeclarationValidationError
 from auto_optimize.reporting.report_generator import generate_html_report, generate_markdown_report, load_summary_for_report
 from auto_optimize.runner.orchestrator import run_contract
 
@@ -91,6 +92,8 @@ def cmd_run(contract_arg: str) -> int:
         summary = run_contract(contract)
     except RuntimeError as exc:
         print(str(exc))
+        if str(exc).startswith("Contract validation failed before run:"):
+            print(f"Next step: run `python -m auto_optimize.cli validate {contract_path}` and fix the reported fields before retrying.")
         return 1
 
     print(f"Run summary: {summary['artifacts']['run_summary']}")
@@ -107,6 +110,7 @@ def cmd_advisor(workspace_arg: str, scenario_arg: str | None, style_arg: str) ->
         print(str(exc))
         return 1
 
+    print(f"Draft declaration: {result.draft_declaration_path}")
     print(f"Draft contract: {result.draft_contract_path}")
     print(f"Readiness report: {result.readiness_report_path}")
     print(f"Readiness status: {result.readiness_report['status']}")
@@ -153,24 +157,23 @@ def cmd_guided(
 ) -> int:
     try:
         advisor_result = run_advisor(workspace_arg, scenario=scenario_arg, contract_style=style_arg)
-        chosen_scenario = advisor_result.readiness_report["scenario_type"]
-        chosen_metric_profile = metric_profile_arg or advisor_result.readiness_report["recommended_metric_profile"]
-        build_result = build_contract(
-            workspace_arg=workspace_arg,
-            scenario=chosen_scenario,
-            metric_profile=chosen_metric_profile,
-            output_path=output_arg,
-            contract_style=style_arg,
-        )
+        declaration = load_declaration(advisor_result.draft_declaration_path)
+        resolved_output_arg = output_arg
+        if resolved_output_arg is None:
+            resolved_output_arg = str(Path(workspace_arg).resolve() / "auto_optimize_outputs" / "optimization.contract.generated.yaml")
+        contract_path = write_contract_from_declaration(declaration, resolved_output_arg)
     except ValueError as exc:
         print(str(exc))
         return 1
 
+    if metric_profile_arg is not None:
+        print("Note: --metric-profile is ignored in declaration-first guided mode.")
+
     print(f"Readiness report: {advisor_result.readiness_report_path}")
-    print(f"Generated contract: {build_result.contract_path}")
-    print(f"Scenario: {build_result.scenario}")
-    print(f"Metric profile: {build_result.metric_profile}")
-    print(f"Contract style: {build_result.contract_style}")
+    print(f"Draft declaration: {advisor_result.draft_declaration_path}")
+    print(f"Generated contract: {contract_path}")
+    print("Scenario: generic_declaration")
+    print(f"Contract style: {style_arg}")
     print("Next step: validate the generated contract before run mode.")
     return 0
 
@@ -181,8 +184,8 @@ def cmd_template(json_output: bool) -> int:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0
 
-    print("Available scenarios:")
-    for scenario in payload["scenarios"]:
+    print("Available reference fixtures:")
+    for scenario in payload["reference_fixtures"]:
         print(f"- {scenario} -> default metric profile: {payload['default_metric_profiles'][scenario]}")
     print("Available metric profiles:")
     for profile in payload["metric_profiles"]:
@@ -212,8 +215,15 @@ def cmd_declare(declaration_arg: str, output_arg: str | None) -> int:
     try:
         declaration = load_declaration(declaration_path)
         contract_path = write_contract_from_declaration(declaration, output_arg)
+    except DeclarationValidationError as exc:
+        print("Declaration validation failed.")
+        for issue in exc.issues:
+            print(f"- {issue}")
+        print("Next step: fix the declaration fields above, then rerun `declare`.")
+        return 1
     except ValueError as exc:
         print(str(exc))
+        print("Next step: adjust the declaration to use only executable variable kinds, metrics sources, and required companion fields in this slice.")
         return 1
 
     print(f"Generated contract: {contract_path}")
