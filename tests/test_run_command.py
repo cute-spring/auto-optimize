@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -106,6 +107,11 @@ def _write_key_value_eval_script(workspace: Path) -> None:
         ),
         encoding="utf-8",
     )
+
+
+def _write_declaration(path: Path, lines: list[str]) -> Path:
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
 
 
 def test_run_command_writes_baseline_artifacts(tmp_path: Path) -> None:
@@ -248,6 +254,277 @@ def test_run_command_fails_when_validation_fails(tmp_path: Path, capsys) -> None
     assert "Next step: run `python -m auto_optimize.cli validate" in captured.out
 
 
+def test_run_command_prints_remediation_for_invalid_declaration(tmp_path: Path, capsys) -> None:
+    declaration_path = _write_declaration(
+        tmp_path / "broken.declaration.yaml",
+        [
+            "objective: {}",
+            "variables: []",
+            "evaluation:",
+            '  command: "python eval/run_eval.py --json"',
+            "comparison:",
+            "  direction: maximize",
+            "safety:",
+            "  editable: []",
+        ],
+    )
+
+    exit_code = main(["run", str(declaration_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "Declaration validation failed." in captured.out
+    assert "objective.description" in captured.out
+    assert "Next step: fix the declaration fields above, then rerun `run`" in captured.out
+
+
+def test_run_command_accepts_generated_parser_declaration_path(tmp_path: Path, capsys) -> None:
+    workspace = tmp_path / "workspace"
+    shutil.copytree(SOURCE_WORKSPACE, workspace)
+    _write_key_value_eval_script(workspace)
+    declaration_path = _write_declaration(
+        tmp_path / "generated-parser.declaration.yaml",
+        [
+            "workspace:",
+            "  path: workspace",
+            "objective:",
+            '  description: "Parse metrics from plain text output."',
+            "variables:",
+            "  - name: top_k",
+            "    kind: yaml_path",
+            "    target: configs/retrieval.yaml",
+            "    path: retrieval.top_k",
+            "    values: [10, 20]",
+            "evaluation:",
+            '  command: "python eval/run_eval.py"',
+            "  metrics_source: generated_parser",
+            "  parser_template: key_value_lines",
+            "comparison:",
+            "  primary_metric: top1_accuracy",
+            "  direction: maximize",
+            "constraints:",
+            "  all_tests_pass:",
+            "    required: true",
+            "safety:",
+            "  editable:",
+            "    - configs/retrieval.yaml",
+            "  protected:",
+            "    - eval/",
+            "adapter_generation:",
+            "  allowed: true",
+            "budget:",
+            "  max_experiments: 2",
+        ],
+    )
+
+    exit_code = main(["run", str(declaration_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    summary = json.loads((workspace / "auto_optimize_outputs" / "run_summary.json").read_text(encoding="utf-8"))
+    report = (workspace / "auto_optimize_outputs" / "optimization_report.md").read_text(encoding="utf-8")
+
+    assert f"Source declaration: {declaration_path.resolve()}" in captured.out
+    assert "Generated contract:" in captured.out
+    assert summary["execution_mode"] == "declaration_native"
+    assert summary["asset_context"]["generated_contract"]["execution_mode"] == "declaration_native"
+    assert summary["asset_context"]["declaration_input"]["path"] == str(declaration_path.resolve())
+    assert summary["generated_adapters"][0]["kind"] == "metrics_parser"
+    assert "Execution mode: `declaration_native`" in report
+
+
+def test_run_command_accepts_env_var_declaration_path(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    shutil.copytree(SOURCE_WORKSPACE, workspace)
+    (workspace / "eval" / "run_eval.py").write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env python3",
+                "from __future__ import annotations",
+                "",
+                "import json",
+                "import os",
+                "",
+                'mode = os.environ.get("AUTO_OPT_MODE", "baseline")',
+                "print(json.dumps({",
+                '    "top1_accuracy": 0.910 if mode == "turbo" else 0.870,',
+                '    "all_tests_pass": True,',
+                "} ))".replace("} )", "})"),
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    declaration_path = _write_declaration(
+        tmp_path / "env-var.declaration.yaml",
+        [
+            "workspace:",
+            "  path: workspace",
+            "objective:",
+            '  description: "Tune env-var based evaluation behavior."',
+            "variables:",
+            "  - name: mode",
+            "    kind: env_var",
+            "    target: AUTO_OPT_MODE",
+            '    values: ["baseline", "turbo"]',
+            "evaluation:",
+            '  command: "python eval/run_eval.py --json"',
+            "  metrics_source: stdout_json",
+            "comparison:",
+            "  primary_metric: top1_accuracy",
+            "  direction: maximize",
+            "constraints:",
+            "  all_tests_pass:",
+            "    required: true",
+            "safety:",
+            "  editable:",
+            "    - env:AUTO_OPT_MODE",
+            "  protected:",
+            "    - eval/",
+            "budget:",
+            "  max_experiments: 2",
+        ],
+    )
+    original_value = os.environ.pop("AUTO_OPT_MODE", None)
+
+    try:
+        assert main(["run", str(declaration_path)]) == 0
+        summary = json.loads((workspace / "auto_optimize_outputs" / "run_summary.json").read_text(encoding="utf-8"))
+        assert summary["execution_mode"] == "declaration_native"
+        assert summary["best_metrics"]["top1_accuracy"] == 0.91
+    finally:
+        if original_value is None:
+            os.environ.pop("AUTO_OPT_MODE", None)
+        else:
+            os.environ["AUTO_OPT_MODE"] = original_value
+
+
+def test_run_command_accepts_cli_arg_declaration_path(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    shutil.copytree(SOURCE_WORKSPACE, workspace)
+    (workspace / "eval" / "run_eval.py").write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env python3",
+                "from __future__ import annotations",
+                "",
+                "import argparse",
+                "import json",
+                "",
+                "parser = argparse.ArgumentParser()",
+                'parser.add_argument("--json", action="store_true")',
+                'parser.add_argument("--mode", default="baseline")',
+                "args = parser.parse_args()",
+                "print(json.dumps({",
+                '    "top1_accuracy": 0.910 if args.mode == "turbo" else 0.870,',
+                '    "all_tests_pass": True,',
+                "} ))".replace("} )", "})"),
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    declaration_path = _write_declaration(
+        tmp_path / "cli-arg.declaration.yaml",
+        [
+            "workspace:",
+            "  path: workspace",
+            "objective:",
+            '  description: "Tune CLI-driven evaluation behavior."',
+            "variables:",
+            "  - name: mode",
+            "    kind: cli_arg",
+            "    target: --mode",
+            '    values: ["baseline", "turbo"]',
+            "evaluation:",
+            '  command: "python eval/run_eval.py --json"',
+            "  metrics_source: stdout_json",
+            "comparison:",
+            "  primary_metric: top1_accuracy",
+            "  direction: maximize",
+            "constraints:",
+            "  all_tests_pass:",
+            "    required: true",
+            "safety:",
+            "  editable:",
+            "    - cmd_arg:--mode",
+            "  protected:",
+            "    - eval/",
+            "budget:",
+            "  max_experiments: 2",
+        ],
+    )
+
+    assert main(["run", str(declaration_path)]) == 0
+    summary = json.loads((workspace / "auto_optimize_outputs" / "run_summary.json").read_text(encoding="utf-8"))
+
+    assert summary["execution_mode"] == "declaration_native"
+    assert summary["best_metrics"]["top1_accuracy"] == 0.91
+    assert summary["accepted_candidates"][0]["changes"][0]["file"] == "cmd_arg:--mode"
+
+
+def test_run_command_accepts_csv_summary_declaration_path(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    shutil.copytree(SOURCE_WORKSPACE, workspace)
+    (workspace / "eval" / "run_eval.py").write_text(
+        "\n".join(
+            [
+                "#!/usr/bin/env python3",
+                "from __future__ import annotations",
+                "",
+                "from pathlib import Path",
+                "import yaml",
+                "",
+                'retrieval = yaml.safe_load(Path("configs/retrieval.yaml").read_text(encoding="utf-8"))["retrieval"]',
+                'top_k = retrieval["top_k"]',
+                'summary_path = Path("reports/summary.csv")',
+                "summary_path.parent.mkdir(parents=True, exist_ok=True)",
+                'summary_path.write_text("top1_accuracy,all_tests_pass\\n" + ("0.910,true\\n" if top_k == 20 else "0.870,true\\n"), encoding="utf-8")',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    declaration_path = _write_declaration(
+        tmp_path / "csv-summary.declaration.yaml",
+        [
+            "workspace:",
+            "  path: workspace",
+            "objective:",
+            '  description: "Tune config with CSV summary metrics."',
+            "variables:",
+            "  - name: top_k",
+            "    kind: yaml_path",
+            "    target: configs/retrieval.yaml",
+            "    path: retrieval.top_k",
+            "    values: [10, 20]",
+            "evaluation:",
+            '  command: "python eval/run_eval.py"',
+            "  metrics_source: csv_with_summary",
+            "  metrics_path: reports/summary.csv",
+            "comparison:",
+            "  primary_metric: top1_accuracy",
+            "  direction: maximize",
+            "constraints:",
+            "  all_tests_pass:",
+            "    required: true",
+            "safety:",
+            "  editable:",
+            "    - configs/retrieval.yaml",
+            "  protected:",
+            "    - eval/",
+            "budget:",
+            "  max_experiments: 2",
+        ],
+    )
+
+    assert main(["run", str(declaration_path)]) == 0
+    summary = json.loads((workspace / "auto_optimize_outputs" / "run_summary.json").read_text(encoding="utf-8"))
+
+    assert summary["execution_mode"] == "declaration_native"
+    assert summary["best_metrics"]["top1_accuracy"] == 0.91
+
+
 def test_run_command_rolls_back_failed_evaluation(tmp_path: Path) -> None:
     def mutate(data, workspace):
         data["evaluation"]["command"] = "python eval/run_eval.py --json --fail-on-top-k 20"
@@ -356,6 +633,8 @@ def test_run_command_generates_and_records_metrics_parser_adapter(tmp_path: Path
     assert len(summary["adapter_provenance"]) == 1
     assert summary["adapter_provenance"][0]["declaration_source"] == "tests.generated_parser"
     assert summary["adapter_provenance"][0]["trigger"]["evaluation_adapter_kind"] == "metrics_parser"
+    assert summary["adapter_provenance"][0]["execution_phase"] == "post_output"
+    assert "name: value" in summary["adapter_provenance"][0]["failure_mode"]
     assert {entry["flag"] for entry in summary["risk_flags"]} >= {
         "generated_code",
         "metrics_parsing",
@@ -370,7 +649,63 @@ def test_run_command_generates_and_records_metrics_parser_adapter(tmp_path: Path
     assert "Declaration input" in report
     assert "Generated contract" in report
     assert "Generated Adapters" in report
+    assert "Failure mode:" in report
     assert summary["generated_adapters"][0]["kind"] == "metrics_parser"
+
+
+def test_run_command_generates_and_records_eval_wrapper_adapter(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        (workspace / "eval" / "run_eval.py").write_text(
+            "\n".join(
+                [
+                    "#!/usr/bin/env python3",
+                    "from __future__ import annotations",
+                    "",
+                    "import json",
+                    "",
+                    'print(\"starting noisy benchmark run\")',
+                    'print(json.dumps({\"top1_accuracy\": 0.904, \"all_tests_pass\": True}))',
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        data["evaluation"] = {
+            "command": "python eval/run_eval.py",
+            "timeout_seconds": 60,
+            "adapter": {
+                "kind": "eval_wrapper",
+                "template": "last_json_line",
+                "output_dir": "auto_optimize_outputs/generated_adapters",
+                "purpose": "Normalize noisy stdout into JSON metrics.",
+                "declaration_source": "tests.eval_wrapper",
+                "risk_flags": ["generated_code", "external_eval_command"],
+            },
+        }
+        data["metrics"]["secondary"] = []
+        data["constraints"] = {"all_tests_pass": {"required": True}}
+        data["run_policy"]["max_experiments"] = 1
+
+    contract_path = _materialize_contract(tmp_path, mutate=mutate)
+
+    exit_code = main(["run", str(contract_path)])
+
+    assert exit_code == 0
+
+    output_dir = tmp_path / "workspace" / "auto_optimize_outputs"
+    summary = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
+    adapter_path = output_dir / "generated_adapters" / "eval_wrapper_last_json_line.py"
+
+    assert adapter_path.exists()
+    assert summary["generated_adapters"]
+    assert summary["generated_adapters"][0]["kind"] == "eval_wrapper"
+    assert summary["generated_adapters"][0]["generated_path"] == str(adapter_path)
+    assert summary["asset_context"]["generated_adapters"]["count"] == 1
+    assert summary["adapter_provenance"][0]["trigger"]["evaluation_adapter_kind"] == "eval_wrapper"
+    assert summary["adapter_provenance"][0]["declaration_source"] == "tests.eval_wrapper"
+    assert summary["adapter_provenance"][0]["execution_phase"] == "pre_command"
+    assert "last stdout lines" in summary["adapter_provenance"][0]["failure_mode"]
+    assert {entry["flag"] for entry in summary["risk_flags"]} >= {"generated_code", "external_eval_command"}
 
 
 def test_run_command_supports_csv_summary_output_format(tmp_path: Path) -> None:

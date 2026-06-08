@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from auto_optimize.runner.generated_adapters import generated_adapter_spec
 from auto_optimize.runner.evaluator import EvaluationExecutionError, execute_evaluation_with_details
 from auto_optimize.safety.budget_guard import validate_run_policy
 from auto_optimize.safety.eval_integrity_guard import infer_eval_paths
@@ -17,9 +18,6 @@ from auto_optimize.shared.git import inspect_git_repo, is_gh_available, is_git_a
 from auto_optimize.shared.paths import resolve_workspace_relative, to_posix_relative
 from auto_optimize.shared.schemas import OptimizationContract, SearchSpaceParameter
 
-SUPPORTED_GENERATED_ADAPTERS = {
-    ("metrics_parser", "key_value_lines"),
-}
 SUPPORTED_EVALUATION_OUTPUT_FORMATS = {"json", "csv_with_summary"}
 
 
@@ -324,19 +322,34 @@ def _validate_evaluation_adapter(contract: OptimizationContract, result: Validat
     if not adapter:
         return
 
+    spec = generated_adapter_spec(adapter)
     kind = adapter.get("kind")
     template = adapter.get("template")
     output_dir = adapter.get("output_dir")
     risk_flags = adapter.get("risk_flags", [])
 
-    if (kind, template) not in SUPPORTED_GENERATED_ADAPTERS:
+    if spec is None:
         result.add_issue(
             "error",
             "unsupported_generated_adapter",
             f"Unsupported generated adapter `{kind}` with template `{template}`.",
             field="evaluation.adapter",
-            hint="Use the built-in `metrics_parser` adapter with `key_value_lines` for this slice.",
+            hint="Use the built-in `metrics_parser/key_value_lines` or `eval_wrapper/last_json_line` adapters for this slice.",
         )
+        return
+
+    for field_name in spec.required_fields:
+        value = adapter.get(field_name)
+        if field_name == "risk_flags":
+            continue
+        if not isinstance(value, str) or not value.strip():
+            result.add_issue(
+                "error",
+                "missing_generated_adapter_field",
+                f"Generated adapter `{kind}/{template}` requires a non-empty `{field_name}` field.",
+                field=f"evaluation.adapter.{field_name}",
+                hint=f"Populate `evaluation.adapter.{field_name}` for `{kind}/{template}`.",
+            )
 
     if not isinstance(output_dir, str) or not output_dir.strip():
         result.add_issue(
@@ -353,6 +366,47 @@ def _validate_evaluation_adapter(contract: OptimizationContract, result: Validat
             "Generated adapter risk_flags must be a list of strings.",
             field="evaluation.adapter.risk_flags",
         )
+    else:
+        missing_flags = [flag for flag in spec.required_risk_flags if flag not in risk_flags]
+        if missing_flags:
+            result.add_issue(
+                "error",
+                "missing_generated_adapter_risk_flag",
+                f"Generated adapter `{kind}/{template}` is missing required risk flags: {missing_flags}.",
+                field="evaluation.adapter.risk_flags",
+                hint=f"Include the required risk flags for `{kind}/{template}`: {list(spec.required_risk_flags)}.",
+            )
+        unsupported_flags = [flag for flag in risk_flags if flag not in spec.allowed_risk_flags]
+        if unsupported_flags:
+            result.add_issue(
+                "error",
+                "unsupported_generated_adapter_risk_flag",
+                f"Generated adapter `{kind}/{template}` declares unsupported risk flags: {unsupported_flags}.",
+                field="evaluation.adapter.risk_flags",
+                hint=f"Use only the supported risk flags for `{kind}/{template}`: {list(spec.allowed_risk_flags)}.",
+            )
+
+    if contract.contract_path and contract.contract_path.exists():
+        raw_contract = yaml.safe_load(contract.contract_path.read_text(encoding="utf-8")) or {}
+        declaration_adapter_generation = raw_contract.get("declaration_context", {}).get("adapter_generation", {})
+        if declaration_adapter_generation:
+            if not declaration_adapter_generation.get("allowed", False):
+                result.add_issue(
+                    "error",
+                    "generated_adapter_not_allowed_by_declaration",
+                    f"Generated adapter `{kind}/{template}` is present, but declaration_context.adapter_generation.allowed is false.",
+                    field="declaration_context.adapter_generation.allowed",
+                    hint="Set `adapter_generation.allowed: true` in the declaration before generating this adapter path.",
+                )
+            allowed_kinds = declaration_adapter_generation.get("allowed_kinds", [])
+            if allowed_kinds and spec.declaration_allowed_kind not in allowed_kinds:
+                result.add_issue(
+                    "error",
+                    "generated_adapter_kind_not_allowed",
+                    f"Generated adapter `{kind}/{template}` is not listed in declaration_context.adapter_generation.allowed_kinds.",
+                    field="declaration_context.adapter_generation.allowed_kinds",
+                    hint=f"Include `{spec.declaration_allowed_kind}` in `adapter_generation.allowed_kinds` for this declaration-driven adapter path.",
+                )
 
 
 def _validate_evaluation_config(contract: OptimizationContract, result: ValidationResult) -> None:

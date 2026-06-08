@@ -46,19 +46,20 @@ See [declaration-protocol.md](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimiz
 
 ## Current Executable Path
 
-The declaration-first slice can now generate an executable contract:
+The declaration-first slice now supports a declaration-native run path:
+
+```bash
+python -m auto_optimize.cli run examples/declarations/generic_config_optimization.declaration.yaml
+python -m auto_optimize.cli report examples/faq_retrieval/workspace/auto_optimize_outputs
+```
+
+If you want to inspect the generated contract explicitly before execution, keep the transitional contract-first path:
 
 ```bash
 python -m auto_optimize.cli declare examples/declarations/generic_config_optimization.declaration.yaml --output /tmp/auto-optimize-declared.contract.yaml
 python -m auto_optimize.cli explain-contract /tmp/auto-optimize-declared.contract.yaml
 python -m auto_optimize.cli validate /tmp/auto-optimize-declared.contract.yaml
-```
-
-Then run the local reference fixture through the generated contract when validation passes:
-
-```bash
 python -m auto_optimize.cli run /tmp/auto-optimize-declared.contract.yaml
-python -m auto_optimize.cli report examples/faq_retrieval/workspace/auto_optimize_outputs
 ```
 
 ## How To Tell It Worked

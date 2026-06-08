@@ -29,7 +29,9 @@ Read these first:
 ## Current Commands
 
 ```bash
+python -m auto_optimize.cli run examples/declarations/generic_config_optimization.declaration.yaml
 python -m auto_optimize.cli declare examples/declarations/generic_config_optimization.declaration.yaml --output /tmp/auto-optimize-declared.contract.yaml
+python -m auto_optimize.cli derive-declaration examples/faq_retrieval/optimization.contract.yaml --output /tmp/auto-optimize-derived.declaration.yaml
 python -m auto_optimize.cli advisor --help
 python -m auto_optimize.cli guided --help
 python -m auto_optimize.cli build --help
@@ -39,7 +41,7 @@ python -m auto_optimize.cli run /tmp/auto-optimize-declared.contract.yaml
 python -m auto_optimize.cli report examples/faq_retrieval/workspace/auto_optimize_outputs
 ```
 
-The current CLI still uses `optimization.contract.yaml` as the executable form, but declarations can now generate that executable contract directly. Dynamic adapter generation is still future work.
+The current CLI still uses `optimization.contract.yaml` as the executable form, but declarations can now generate that contract directly, existing contracts can be derived back into declarations, and generated parser adapters are available in the current slice.
 
 ## Current Implementation
 

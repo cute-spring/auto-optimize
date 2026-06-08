@@ -212,6 +212,51 @@ def test_csv_summary_output_format_requires_output_file(tmp_path: Path) -> None:
     assert any(issue.code == "missing_csv_summary_output_file" for issue in result.issues)
 
 
+def test_generated_adapter_requires_expected_risk_flags(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        data["evaluation"]["command"] = "python eval/run_eval.py"
+        data["evaluation"]["adapter"] = {
+            "kind": "metrics_parser",
+            "template": "key_value_lines",
+            "output_dir": "auto_optimize_outputs/generated_adapters",
+            "purpose": "Parse key/value metrics into JSON.",
+            "declaration_source": "tests.generated_parser",
+            "risk_flags": ["generated_code"],
+        }
+
+    _, result = _validate(tmp_path, mutate=mutate)
+
+    assert not result.valid
+    assert any(issue.code == "missing_generated_adapter_risk_flag" for issue in result.issues)
+
+
+def test_generated_adapter_kind_must_be_allowed_by_declaration_context(tmp_path: Path) -> None:
+    def mutate(data, workspace):
+        data["evaluation"]["command"] = "python eval/run_eval.py"
+        data["evaluation"]["adapter"] = {
+            "kind": "eval_wrapper",
+            "template": "last_json_line",
+            "output_dir": "auto_optimize_outputs/generated_adapters",
+            "purpose": "Normalize noisy stdout into JSON metrics.",
+            "declaration_source": "tests.eval_wrapper",
+            "risk_flags": ["generated_code", "external_eval_command"],
+        }
+        data["declaration_context"] = {
+            "adapter_generation": {
+                "allowed": True,
+                "allowed_kinds": ["metrics_parser"],
+                "output_dir": "auto_optimize_outputs/generated_adapters",
+            }
+        }
+        data["constraints"] = {"all_tests_pass": {"required": True}}
+        data["metrics"]["secondary"] = []
+
+    _, result = _validate(tmp_path, mutate=mutate)
+
+    assert not result.valid
+    assert any(issue.code == "generated_adapter_kind_not_allowed" for issue in result.issues)
+
+
 def test_eval_scope_violation_fails(tmp_path: Path) -> None:
     _, result = _validate(
         tmp_path,

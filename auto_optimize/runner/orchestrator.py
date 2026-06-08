@@ -252,7 +252,11 @@ def _load_workspace_benchmark_context(workspace_path: Path) -> dict[str, Any] | 
     }
 
 
-def _build_asset_context(contract: OptimizationContract, generated_adapters: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_asset_context(
+    contract: OptimizationContract,
+    generated_adapters: list[dict[str, Any]],
+    execution_mode: str,
+) -> dict[str, Any]:
     raw_contract = yaml.safe_load(contract.contract_path.read_text(encoding="utf-8")) or {}
     declaration_context = raw_contract.get("declaration_context", {})
     source_declaration = declaration_context.get("source_declaration")
@@ -266,6 +270,7 @@ def _build_asset_context(contract: OptimizationContract, generated_adapters: lis
             "path": str(contract.contract_path),
             "present": True,
             "scenario_type": contract.scenario.type,
+            "execution_mode": execution_mode,
         },
         "generated_adapters": {
             "count": len(generated_adapters),
@@ -296,6 +301,10 @@ def _build_adapter_provenance(contract: OptimizationContract, generated_adapters
                 "purpose": adapter.get("purpose"),
                 "declaration_source": adapter.get("declaration_source"),
                 "risk_flags": list(adapter.get("risk_flags", [])),
+                "execution_phase": adapter.get("execution_phase"),
+                "expected_input": adapter.get("expected_input"),
+                "failure_mode": adapter.get("failure_mode"),
+                "remediation_hint": adapter.get("remediation_hint"),
                 "trigger": {
                     "evaluation_adapter_kind": evaluation_adapter.get("kind"),
                     "evaluation_adapter_template": evaluation_adapter.get("template"),
@@ -445,7 +454,7 @@ def _push_remote_artifacts(contract: OptimizationContract, git_context: GitRunCo
         raise RuntimeError(exc.message if exc.hint is None else f"{exc.message}\n{exc.hint}") from exc
 
 
-def run_contract(contract: OptimizationContract) -> dict[str, Any]:
+def run_contract(contract: OptimizationContract, execution_mode: str = "contract") -> dict[str, Any]:
     validation_result = validate_contract(contract)
     validation_report_path = write_validation_report(contract, validation_result)
     if not validation_result.valid or validation_result.baseline_metrics is None:
@@ -679,6 +688,7 @@ def run_contract(contract: OptimizationContract) -> dict[str, Any]:
     summary = {
         "status": "completed",
         "mode": "run",
+        "execution_mode": execution_mode,
         "scenario_type": contract.scenario.type,
         "scenario_name": contract.scenario.name,
         "search_strategy": contract.run_policy.search_strategy,
@@ -700,7 +710,7 @@ def run_contract(contract: OptimizationContract) -> dict[str, Any]:
         "constraints_satisfied": all(check.passed for check in constraint_checks),
         "constraint_checks": [asdict(check) for check in constraint_checks],
         "generated_adapters": validation_result.generated_adapters,
-        "asset_context": _build_asset_context(contract, validation_result.generated_adapters),
+        "asset_context": _build_asset_context(contract, validation_result.generated_adapters, execution_mode),
         "adapter_provenance": adapter_provenance,
         "risk_flags": risk_flags,
         "decision_rationale_summary": decision_rationale_summary,

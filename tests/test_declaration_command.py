@@ -12,6 +12,7 @@ from auto_optimize.contract.loader import load_contract
 from auto_optimize.contract.validator import validate_contract
 from auto_optimize.declaration.converter import declaration_to_contract_data
 from auto_optimize.declaration.loader import DeclarationValidationError, load_declaration
+from auto_optimize.declaration.reverse_converter import contract_to_declaration_data
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_DIR = ROOT / "examples" / "faq_retrieval"
@@ -331,6 +332,91 @@ def test_generated_contract_from_example_declaration_validates() -> None:
             contract_path.unlink()
 
     assert result.valid
+
+
+def test_contract_to_declaration_round_trips_example_contract(tmp_path: Path) -> None:
+    contract_path = ROOT / "examples" / "faq_retrieval" / "optimization.contract.yaml"
+    contract = load_contract(contract_path)
+    declaration_path = tmp_path / "derived.declaration.yaml"
+
+    assert main(["derive-declaration", str(contract_path), "--output", str(declaration_path)]) == 0
+    assert declaration_path.exists()
+
+    declaration = load_declaration(declaration_path)
+    regenerated_contract_path = tmp_path / "regenerated.contract.yaml"
+
+    assert main(["declare", str(declaration_path), "--output", str(regenerated_contract_path)]) == 0
+    regenerated_contract = load_contract(regenerated_contract_path)
+    result = validate_contract(regenerated_contract)
+
+    assert declaration.objective.description == contract.scenario.name
+    assert declaration.variables[0].kind == "yaml_path"
+    assert declaration.evaluation.metrics_source == "stdout_json"
+    assert result.valid
+
+
+def test_contract_to_declaration_maps_generated_parser_adapter(tmp_path: Path) -> None:
+    contract_path = tmp_path / "generated-parser.contract.yaml"
+    contract_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": "0.2",
+                "scenario": {"type": "generic_declaration", "name": "Generated parser contract"},
+                "workspace": {"path": "workspace"},
+                "editable_scope": ["configs/retrieval.yaml"],
+                "protected_scope": ["eval/", "data/"],
+                "search_space": {
+                    "top_k": {
+                        "values": [10, 20],
+                        "mapping": {
+                            "type": "yaml_path",
+                            "file": "configs/retrieval.yaml",
+                            "path": "retrieval.top_k",
+                        },
+                    }
+                },
+                "evaluation": {
+                    "command": "python eval/run_eval.py",
+                    "output_format": "json",
+                    "timeout_seconds": 60,
+                    "adapter": {
+                        "kind": "metrics_parser",
+                        "template": "key_value_lines",
+                        "output_dir": "auto_optimize_outputs/generated_adapters",
+                        "purpose": "Parse evaluation output into metrics.",
+                        "declaration_source": "tests.generated_parser",
+                        "risk_flags": ["generated_code", "metrics_parsing"],
+                    },
+                },
+                "metrics": {
+                    "primary": {"name": "top1_accuracy", "direction": "maximize"},
+                    "secondary": [],
+                },
+                "constraints": {"all_tests_pass": {"required": True}},
+                "declaration_context": {
+                    "objective": {"description": "Parse generated metrics."},
+                    "evaluation": {
+                        "metrics_source": "generated_parser",
+                        "parser_template": "key_value_lines",
+                        "prepared_inputs": [],
+                        "repetitions": 1,
+                    },
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    contract = load_contract(contract_path)
+    declaration_data = contract_to_declaration_data(contract, yaml.safe_load(contract_path.read_text(encoding="utf-8")), tmp_path / "derived.declaration.yaml")
+
+    assert declaration_data["evaluation"]["metrics_source"] == "generated_parser"
+    assert declaration_data["evaluation"]["parser_template"] == "key_value_lines"
+    assert declaration_data["adapter_generation"]["allowed"] is True
+    assert declaration_data["adapter_generation"]["allowed_kinds"] == ["metrics_parser"]
 
 
 def test_declare_command_writes_valid_contract(tmp_path: Path) -> None:

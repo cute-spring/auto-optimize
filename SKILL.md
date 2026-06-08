@@ -94,6 +94,8 @@ Ask before generating or running code that edits project source, uses credential
 ## CLI
 
 ```bash
+python -m auto_optimize.cli declare ./optimization.declaration.yaml --output ./optimization.contract.yaml
+python -m auto_optimize.cli derive-declaration ./optimization.contract.yaml --output ./optimization.declaration.yaml
 python -m auto_optimize.cli advisor --workspace ./project
 python -m auto_optimize.cli guided --workspace ./project --style minimal
 python -m auto_optimize.cli explain-contract optimization.contract.yaml
@@ -102,7 +104,7 @@ python -m auto_optimize.cli run optimization.contract.yaml
 python -m auto_optimize.cli report auto_optimize_outputs
 ```
 
-Current CLI commands still operate on executable contracts. The project direction is to make declarations the primary user-facing input and generate contracts/adapters from them.
+The current CLI still executes contracts, but declarations are now the primary authoring path and existing contracts can be converted back into declarations for migration.
 
 ## Output Files
 

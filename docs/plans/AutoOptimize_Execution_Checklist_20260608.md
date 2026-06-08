@@ -31,7 +31,7 @@
 - [x] 新增 generic declaration 示例
 - [x] 让 `declare -> explain-contract -> validate` 端到端可执行
 - [x] 为 declaration slice 补充测试覆盖
-- [x] 保持全量测试通过，当前基线为 `79 passed`
+- [x] 保持全量测试通过，当前基线为 `81 passed`
 
 ## Priority 1: 动态 Adapter 最小闭环
 
@@ -120,10 +120,10 @@
 
 ## 可延后项
 
-- [ ] 支持从 existing contract 反向生成 declaration
-- [ ] 重新梳理 benchmark/reference 资产与 generic flow 的边界
-- [ ] 统一 `SKILL.md` 与最新 CLI 示例，补上 `declare`
-- [ ] 评估是否需要 declaration lint / format 命令
+- [x] 支持从 existing contract 反向生成 declaration
+- [x] 重新梳理 benchmark/reference 资产与 generic flow 的边界
+- [x] 统一 `SKILL.md` 与最新 CLI 示例，补上 `declare`
+- [x] 评估是否需要 declaration lint / format 命令
 
 ## 建议执行顺序
 

@@ -140,7 +140,7 @@ def test_guided_command_generates_contract_and_readiness_for_workspace(tmp_path:
 
     payload = yaml.safe_load(generated_contract_path.read_text(encoding="utf-8"))
     assert payload["scenario"]["type"] == "generic_declaration"
-    assert payload["declaration_context"]["source_declaration"].endswith("optimization.declaration.draft.yaml")
+    assert payload["declaration_context"]["source_declaration"].endswith("optimization.declaration.normalized.yaml")
 
     contract = load_contract(generated_contract_path)
     result = validate_contract(contract)
@@ -164,6 +164,25 @@ def test_guided_command_defaults_to_minimal_style(tmp_path: Path) -> None:
     assert payload["constraints"] == {}
     assert "builder_context" not in payload
     assert readiness["recommended_contract_style"] == "minimal"
+    assert readiness["normalized_declaration_path"].endswith("optimization.declaration.normalized.yaml")
+
+
+def test_guided_command_prints_readiness_scores_and_gap_summary(tmp_path: Path, capsys) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(parents=True, exist_ok=True)
+    (workspace / "configs").mkdir(parents=True, exist_ok=True)
+    (workspace / "eval").mkdir(parents=True, exist_ok=True)
+    (workspace / "configs" / "retrieval.yaml").write_text("retrieval:\n  top_k: 10\n", encoding="utf-8")
+
+    exit_code = main(["guided", "--workspace", str(workspace), "--scenario", "faq_retrieval"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Readiness scores:" in captured.out
+    assert "Autofill applied:" in captured.out
+    assert "Manual decisions required:" in captured.out
+    assert "Top declaration gaps:" in captured.out
+    assert "missing_evaluation_script" in captured.out
 
 
 def test_guided_command_uses_declaration_first_even_with_metric_profile_override(tmp_path: Path, capsys) -> None:
@@ -196,7 +215,7 @@ def test_guided_command_infers_benchmark_workspace_and_preserves_reference_fixtu
     readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
 
     assert payload["scenario"]["type"] == "generic_declaration"
-    assert payload["declaration_context"]["source_declaration"].endswith("optimization.declaration.draft.yaml")
+    assert payload["declaration_context"]["source_declaration"].endswith("optimization.declaration.normalized.yaml")
     assert readiness["reference_fixture_context"]["fixture_kind"] == "benchmark_reference_fixture"
     assert readiness["reference_fixture_context"]["benchmark_key"] == "du_retrieval"
 
@@ -218,7 +237,7 @@ def test_guided_command_supports_custom_output_path_with_declaration_first_contr
 
     payload = yaml.safe_load(output_path.read_text(encoding="utf-8"))
     assert payload["scenario"]["type"] == "generic_declaration"
-    assert payload["declaration_context"]["source_declaration"].endswith("optimization.declaration.draft.yaml")
+    assert payload["declaration_context"]["source_declaration"].endswith("optimization.declaration.normalized.yaml")
 
     contract = load_contract(output_path)
     result = validate_contract(contract)

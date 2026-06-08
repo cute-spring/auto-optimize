@@ -1,0 +1,100 @@
+{
+  "generated_at": "2026-06-08 14:19:31 UTC",
+  "mode": "status-audit",
+  "signals_path": "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/release_readiness_gate/status_audit_signals.yaml",
+  "source_checklist": "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/plans/AutoOptimize_Execution_Checklist_20260608.md",
+  "last_refreshed": "2026-06-08",
+  "goal_status": "complete",
+  "current_focus": "Generic Skill Vision Gap Plan completed",
+  "last_full_test_at": "2026-06-08",
+  "recommended_next_step": "Treat further work as a new roadmap slice beyond Generic_Skill_Vision_Gap_Plan_20260608.",
+  "strategic_gaps": [],
+  "global_signals": {
+    "full_pytest_status": "passing",
+    "full_pytest_result": "95 passed",
+    "declaration_first_default_path": true,
+    "declaration_native_run": true,
+    "generated_adapter_runtime_execution": true,
+    "trust_reporting_sections_present": true
+  },
+  "checklist_progress": {
+    "checked_items": 66,
+    "unchecked_items": 0,
+    "total_items": 66,
+    "completion_ratio": 1.0,
+    "completion_percent": 100.0
+  },
+  "stages": [
+    {
+      "key": "priority_1",
+      "label": "Dynamic Adapter Minimal Loop",
+      "status": "complete",
+      "expected_items": 10,
+      "completed_items": 10,
+      "completion_percent": 100.0,
+      "evidence": [
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_run_command.py",
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_declaration_command.py"
+      ]
+    },
+    {
+      "key": "priority_2",
+      "label": "Guided Path De-Scenarization",
+      "status": "complete",
+      "expected_items": 14,
+      "completed_items": 14,
+      "completion_percent": 100.0,
+      "evidence": [
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/advisor/service.py",
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/cli.py",
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_builder_command.py",
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_advisor_command.py"
+      ]
+    },
+    {
+      "key": "priority_3",
+      "label": "Trust And Reporting",
+      "status": "complete",
+      "expected_items": 6,
+      "completed_items": 6,
+      "completion_percent": 100.0,
+      "evidence": [
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/reporting/report_generator.py",
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/runner/orchestrator.py",
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_run_command.py"
+      ]
+    },
+    {
+      "key": "priority_4",
+      "label": "Declaration Execution Coverage",
+      "status": "complete",
+      "expected_items": 6,
+      "completed_items": 6,
+      "completion_percent": 100.0,
+      "evidence": [
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/declaration/converter.py",
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/contract/validator.py",
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/runner/evaluator.py",
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_declaration_command.py",
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/tests/test_contract_validator.py"
+      ]
+    },
+    {
+      "key": "priority_5",
+      "label": "Governance And Release Artifacts",
+      "status": "complete",
+      "expected_items": 6,
+      "completed_items": 6,
+      "completion_percent": 100.0,
+      "evidence": [
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/release_readiness_gate/README.md",
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/release_readiness_gate/release_readiness_template.md",
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/release_readiness_gate/definition_of_done.md",
+        "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/auto_optimize/governance/status_audit.py"
+      ]
+    }
+  ],
+  "historical_snapshots": [
+    "/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/assessments/Project_Status_Snapshot_20260607.md"
+  ]
+}

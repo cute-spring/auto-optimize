@@ -9,10 +9,50 @@ from auto_optimize.builder.service import build_contract, list_available_templat
 from auto_optimize.contract.explainer import expanded_contract_data, load_raw_contract_data, write_contract_explanation
 from auto_optimize.contract.loader import load_contract
 from auto_optimize.contract.validator import validate_contract, write_validation_report
-from auto_optimize.declaration import load_declaration, write_contract_from_declaration
+from auto_optimize.declaration import load_declaration, write_contract_from_declaration, write_declaration_from_contract
 from auto_optimize.declaration.loader import DeclarationValidationError
+from auto_optimize.governance import write_status_snapshot
 from auto_optimize.reporting.report_generator import generate_html_report, generate_markdown_report, load_summary_for_report
 from auto_optimize.runner.orchestrator import run_contract
+
+
+def _is_declaration_path(path: Path) -> bool:
+    return path.name.endswith(".declaration.yaml")
+
+
+def _default_run_contract_path(declaration) -> Path:
+    return declaration.workspace_path / "auto_optimize_outputs" / "optimization.contract.generated.yaml"
+
+
+def _print_readiness_summary(readiness_report: dict[str, object]) -> None:
+    scores = readiness_report.get("readiness_scores", {})
+    if isinstance(scores, dict) and scores:
+        print(
+            "Readiness scores: "
+            f"authoring={scores.get('authoring_completeness')}, "
+            f"execution={scores.get('execution_readiness')}, "
+            f"safety={scores.get('safety_readiness')}"
+        )
+
+    autofill_applied = readiness_report.get("autofill_applied", [])
+    if isinstance(autofill_applied, list):
+        print(f"Autofill applied: {len(autofill_applied)}")
+
+    manual_decisions = readiness_report.get("manual_decisions_required", [])
+    if isinstance(manual_decisions, list):
+        print(f"Manual decisions required: {len(manual_decisions)}")
+
+    declaration_gaps = readiness_report.get("declaration_gaps", [])
+    if isinstance(declaration_gaps, list) and declaration_gaps:
+        print("Top declaration gaps:")
+        for gap in declaration_gaps[:3]:
+            if not isinstance(gap, dict):
+                continue
+            detail = f"- [{gap.get('severity', 'unknown')}] {gap.get('id')}: {gap.get('message')}"
+            remediation = gap.get("remediation")
+            if remediation:
+                detail += f" Remediation: {remediation}"
+            print(detail)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -54,8 +94,15 @@ def build_parser() -> argparse.ArgumentParser:
     declare_parser.add_argument("declaration", help="Path to optimization.declaration.yaml")
     declare_parser.add_argument("--output", required=False, help="Path to write the generated optimization.contract.yaml")
 
-    run_parser = subparsers.add_parser("run", help="Run an optimization contract")
-    run_parser.add_argument("contract", nargs="?")
+    derive_parser = subparsers.add_parser("derive-declaration", help="Derive a declaration YAML from an existing contract")
+    derive_parser.add_argument("contract", help="Path to optimization.contract.yaml")
+    derive_parser.add_argument("--output", required=False, help="Path to write the generated optimization.declaration.yaml")
+
+    run_parser = subparsers.add_parser("run", help="Run an optimization contract or declaration")
+    run_parser.add_argument("contract", nargs="?", help="Path to optimization.contract.yaml or optimization.declaration.yaml")
+
+    status_audit_parser = subparsers.add_parser("status-audit", help="Generate a current project status snapshot from governance signals")
+    status_audit_parser.add_argument("--output", required=False, help="Path to write the generated status snapshot Markdown file")
 
     report_parser = subparsers.add_parser("report", help="Regenerate a report from an output directory or log path")
     report_parser.add_argument("experiment_log", nargs="?")
@@ -86,16 +133,42 @@ def cmd_validate(contract_arg: str) -> int:
 
 
 def cmd_run(contract_arg: str) -> int:
-    contract_path = Path(contract_arg).resolve()
-    contract = load_contract(contract_path)
+    if not contract_arg:
+        print("run mode requires a contract or declaration path.")
+        return 1
+
+    input_path = Path(contract_arg).resolve()
+    execution_mode = "contract"
+    contract_path = input_path
+
     try:
-        summary = run_contract(contract)
+        if _is_declaration_path(input_path):
+            declaration = load_declaration(input_path)
+            contract_path = write_contract_from_declaration(declaration, _default_run_contract_path(declaration))
+            execution_mode = "declaration_native"
+        contract = load_contract(contract_path)
+    except DeclarationValidationError as exc:
+        print("Declaration validation failed.")
+        for issue in exc.issues:
+            print(f"- {issue}")
+        print("Next step: fix the declaration fields above, then rerun `run` with the declaration path.")
+        return 1
+    except ValueError as exc:
+        print(str(exc))
+        print("Next step: adjust the declaration to use only executable variable kinds, metrics sources, and required companion fields in this slice.")
+        return 1
+
+    try:
+        summary = run_contract(contract, execution_mode=execution_mode)
     except RuntimeError as exc:
         print(str(exc))
         if str(exc).startswith("Contract validation failed before run:"):
             print(f"Next step: run `python -m auto_optimize.cli validate {contract_path}` and fix the reported fields before retrying.")
         return 1
 
+    if execution_mode == "declaration_native":
+        print(f"Source declaration: {input_path}")
+        print(f"Generated contract: {contract_path}")
     print(f"Run summary: {summary['artifacts']['run_summary']}")
     print(f"Experiment log: {summary['artifacts']['experiment_log_jsonl']}")
     print(f"Markdown report: {summary['artifacts']['optimization_report_md']}")
@@ -111,10 +184,12 @@ def cmd_advisor(workspace_arg: str, scenario_arg: str | None, style_arg: str) ->
         return 1
 
     print(f"Draft declaration: {result.draft_declaration_path}")
+    print(f"Normalized declaration: {result.normalized_declaration_path}")
     print(f"Draft contract: {result.draft_contract_path}")
     print(f"Readiness report: {result.readiness_report_path}")
     print(f"Readiness status: {result.readiness_report['status']}")
     print(f"Recommended contract style: {result.readiness_report['recommended_contract_style']}")
+    _print_readiness_summary(result.readiness_report)
     return 0
 
 
@@ -157,7 +232,7 @@ def cmd_guided(
 ) -> int:
     try:
         advisor_result = run_advisor(workspace_arg, scenario=scenario_arg, contract_style=style_arg)
-        declaration = load_declaration(advisor_result.draft_declaration_path)
+        declaration = load_declaration(advisor_result.normalized_declaration_path)
         resolved_output_arg = output_arg
         if resolved_output_arg is None:
             resolved_output_arg = str(Path(workspace_arg).resolve() / "auto_optimize_outputs" / "optimization.contract.generated.yaml")
@@ -171,9 +246,11 @@ def cmd_guided(
 
     print(f"Readiness report: {advisor_result.readiness_report_path}")
     print(f"Draft declaration: {advisor_result.draft_declaration_path}")
+    print(f"Normalized declaration: {advisor_result.normalized_declaration_path}")
     print(f"Generated contract: {contract_path}")
     print("Scenario: generic_declaration")
     print(f"Contract style: {style_arg}")
+    _print_readiness_summary(advisor_result.readiness_report)
     print("Next step: validate the generated contract before run mode.")
     return 0
 
@@ -257,6 +334,36 @@ def cmd_report(target_arg: str) -> int:
     return 0
 
 
+def cmd_status_audit(output_arg: str | None) -> int:
+    signals_path = Path(__file__).resolve().parents[1] / "docs" / "release_readiness_gate" / "status_audit_signals.yaml"
+    snapshot, markdown_path, json_path = write_status_snapshot(
+        signals_path=signals_path,
+        output_path=None if output_arg is None else Path(output_arg).resolve(),
+    )
+
+    print(f"Status snapshot: {markdown_path}")
+    print(f"Status snapshot JSON: {json_path}")
+    print(f"Overall completion: {snapshot['checklist_progress']['completion_percent']}%")
+    print(f"Recommended next step: {snapshot.get('recommended_next_step')}")
+    return 0
+
+
+def cmd_derive_declaration(contract_arg: str, output_arg: str | None) -> int:
+    contract_path = Path(contract_arg).resolve()
+    contract = load_contract(contract_path)
+    try:
+        declaration_path = write_declaration_from_contract(contract, output_arg)
+    except ValueError as exc:
+        print(str(exc))
+        return 1
+
+    print(f"Generated declaration: {declaration_path}")
+    print(f"Source contract: {contract_path}")
+    print("Note: contract-only sections such as version_control, pareto, and report stay in the contract layer.")
+    print("Next step: review the derived declaration, then use `declare` to regenerate an executable contract when needed.")
+    return 0
+
+
 def cmd_stub(command_name: str) -> int:
     raise SystemExit(f"{command_name} mode is not implemented yet in this MVP slice.")
 
@@ -279,8 +386,12 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_explain_contract(args.contract, args.output, args.json)
     if args.command == "declare":
         return cmd_declare(args.declaration, args.output)
+    if args.command == "derive-declaration":
+        return cmd_derive_declaration(args.contract, args.output)
     if args.command == "run":
         return cmd_run(args.contract)
+    if args.command == "status-audit":
+        return cmd_status_audit(args.output)
     if args.command == "report":
         return cmd_report(args.experiment_log)
     raise SystemExit(f"Unknown command: {args.command}")

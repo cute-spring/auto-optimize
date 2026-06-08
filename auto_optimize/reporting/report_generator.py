@@ -107,6 +107,8 @@ def generate_markdown_report(summary: dict[str, Any], baseline_metrics: dict[str
     if generated_contract.get("present"):
         lines.append(f"- Generated contract: `{generated_contract.get('path')}`")
         lines.append(f"- Generated contract scenario: `{generated_contract.get('scenario_type')}`")
+        if generated_contract.get("execution_mode"):
+            lines.append(f"- Execution mode: `{generated_contract.get('execution_mode')}`")
     else:
         lines.append("- Generated contract: `none recorded`")
     lines.append(f"- Generated adapters count: `{generated_adapter_assets.get('count', 0)}`")
@@ -123,6 +125,10 @@ def generate_markdown_report(summary: dict[str, Any], baseline_metrics: dict[str
                 f"`{adapter['kind']}` via `{adapter['template']}` generated `{adapter['generated_path']}` "
                 f"for `{adapter['purpose']}` with risk flags `{adapter['risk_flags']}`."
             )
+            if adapter.get("failure_mode"):
+                lines.append(f"- Failure mode: {adapter['failure_mode']}")
+            if adapter.get("remediation_hint"):
+                lines.append(f"- Remediation: {adapter['remediation_hint']}")
 
     lines.extend(["", "## Adapter Provenance", ""])
     if not adapter_provenance:
@@ -134,6 +140,14 @@ def generate_markdown_report(summary: dict[str, Any], baseline_metrics: dict[str
                 f"`{adapter['kind']}` via `{adapter['template']}` came from "
                 f"`{adapter['declaration_source'] or 'no declaration source recorded'}` "
                 f"and wrote `{adapter['generated_path']}` under `{adapter['output_dir']}`."
+            )
+            lines.append(
+                "- "
+                f"Execution phase `{adapter.get('execution_phase')}` expects `{adapter.get('expected_input')}`."
+            )
+            lines.append(
+                "- "
+                f"Failure mode: {adapter.get('failure_mode')} Remediation: {adapter.get('remediation_hint')}"
             )
             trigger = adapter.get("trigger", {})
             lines.append(
