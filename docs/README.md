@@ -2,6 +2,7 @@
 
 Read these first:
 
+- `user-manual-zh.md`: beginner-friendly Chinese manual for connecting a specific feature into AutoOptimize.
 - `generic-skill-direction.md`: the current product direction, centered on a generic declaration-driven skill.
 - `declaration-protocol.md`: the intended user-facing declaration shape.
 - `quickstart.md`: declaration-first starting path.

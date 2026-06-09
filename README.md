@@ -10,11 +10,13 @@ It is not intended to become a large static catalog of hardcoded scenarios, data
 
 Read these first:
 
-1. [Generic Skill Direction](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/generic-skill-direction.md:1)
-2. [Declaration Protocol](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/declaration-protocol.md:1)
-3. [Quickstart](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/quickstart.md:1)
-4. [Command Guide](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/command-guide.md:1)
-5. [Architecture Overview](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/architecture-overview.md:1)
+1. [中文使用手册](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/user-manual-zh.md:1)
+2. [Generic Skill Direction](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/generic-skill-direction.md:1)
+3. [Declaration Protocol](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/declaration-protocol.md:1)
+4. [Quickstart](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/quickstart.md:1)
+5. [Command Guide](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/command-guide.md:1)
+6. [Architecture Overview](/Users/gavinzhang/ws-ai-recharge-2026/auto-optimize/docs/architecture-overview.md:1)
+
 
 ## Core Workflow
 
